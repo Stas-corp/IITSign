@@ -52,6 +52,10 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
         dSettings["szPort"] = "80"
         iface.SetOCSPSettings(dSettings)
         
+        dSettings = {}
+        dSettings["bGetStamps"] = True
+        dSettings["szAddress"] = "http://acskidd.gov.ua/services/tsp/"
+        dSettings["szPort"] = "80"
         iface.SetTSPSettings(tsp_settings)
         iface.CtxCreate(lib_ctx)
         
@@ -141,18 +145,12 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
             EU_SIGN_TYPE_CADES_X_LONG,  # Тип подписи CAdES-X Long
             signer
         )
-        
-        # Унификация: вытащить signer как bytes
-        if signer and signer[0]:
-            raw_signer = signer[0]  # bytes уже
-        else:
-            raise RuntimeError("CtxCreateSignerEx не вернул signer")
 
         # 8) Добавить валидационные данные К SIGNER (не к всей подписи!)
         up_signer_str, up_signer_bytes = [], []
         iface.AppendValidationDataToSignerEx(
             None,                  # pszPreviousSigner (если signer в base64-строке; у нас bytes)
-            raw_signer, len(raw_signer),   # pbPreviousSigner, len
+            signer[0], len(signer[0]),   # pbPreviousSigner, len
             cert_bytes, len(cert_bytes),
             EU_SIGN_TYPE_CADES_X_LONG,
             up_signer_str, up_signer_bytes
@@ -165,7 +163,7 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
             final_signer = base64.b64decode(up_signer_str[0])
         else:
             # если сервисы TSP/OCSP не ответили, можно использовать исходный raw_signer как fallback
-            final_signer = raw_signer
+            final_signer = signer[0]
 
         # 9) Собрать контейнер: пустая подпись данных -> добавить signer
         empty_sign_str, empty_sign_bytes = [], []
@@ -183,39 +181,12 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
                 None, 0,
                 final_sign_str, final_sign_bytes
             )
-        else:
-            iface.AppendSigner(
-                None,
-                final_signer, len(final_signer),
-                cert_bytes, len(cert_bytes),
-                None,
-                empty_sign_bytes[0], len(empty_sign_bytes[0]),
-                final_sign_str, final_sign_bytes
-            )
-
-        # 10) Сохранить: сначала пробуем bytes, иначе декодим Base64-строку
-        if final_sign_bytes and final_sign_bytes[0]:
-            signed_blob = final_sign_bytes[0]
-        elif final_sign_str and final_sign_str[0]:
-            signed_blob = base64.b64decode(final_sign_str[0])
-        else:
-            raise RuntimeError("AppendSigner не вернул данные подписи")
-
-        # signed_data = []
-        # iface.CtxSignData(
-        #     pk_ctx[0],
-        #     sign_algo,
-        #     file_data, len(file_data),
-        #     False,  # bExternal = False (внутренняя подпись - данные включены)
-        #     True,   # bAppendCert = True (включить сертификат)
-        #     signed_data
-        # )
         
         output_filename = file_path + ".p7s"
         with open(output_filename, "wb") as f:
-            f.write(signed_blob)
+            f.write(final_sign_str[0])
 
-        return signed_blob, output_filename
+        return final_sign_str[0], output_filename
         
     finally:
         # cleanup code...
