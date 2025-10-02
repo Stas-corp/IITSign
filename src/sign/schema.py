@@ -1,9 +1,10 @@
+from pathlib import Path
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Union
 
 class SignTask(BaseModel):
-    file_path: str
-    key_file_path: str
+    file_path: Union[str, Path]
+    key_file_path: Union[str, Path]
     key_password: str
     output_dir: Optional[str] = None
 
