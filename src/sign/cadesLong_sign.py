@@ -1,17 +1,29 @@
-import os, sys, platform
+import os
 import base64
 
-# Абсолютный путь к каталогу с DLL
-DLL_DIR = r"C:\Users\ssamo\Documents\Projects\IITSign\Modules"
-
-os.add_dll_directory(DLL_DIR)
-os.environ["PATH"] = DLL_DIR + os.pathsep + os.environ.get("PATH", "")
-# (опционально) гарантируем 64-битный Python
-assert platform.architecture()[0] == "64bit", "Нужен 64-битный Python"
+from typing import Optional, Tuple
 
 from Modules.EUSignCP import *
+from src.sign.signManager import EUSignCPManager
 
-def sign_file_cades_x_long(key_file_path, key_password, file_path):
+def sign_file_cades_x_long(
+    iface: EUSignCPManager,
+    key_file_path: str, 
+    key_password: str, 
+    target_file_path: str, 
+    output_dir: Optional[str] = None
+) -> Tuple[bytes, str]:
+    """
+    Функция подписи файла.
+    
+    # Важно!
+    
+    Для запуска обязательно нужна инициализация библиотеки 
+    
+    и инстант класса `EUSignCPManager`
+    (инициализация библиотеки внутри)
+    """
+    
     if isinstance(key_password, str):
         key_password = key_password.encode("utf-8")
     
@@ -20,46 +32,15 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
         jks_bytes = f.read()
     
     # Чтение файла для подписи
-    with open(file_path, "rb") as f:
+    with open(target_file_path, "rb") as f:
         file_data = f.read()
-    
-    EULoad()
-    iface = EUGetInterface()
-    
-    tsp_settings = {
-        "bGetStamps": True,
-        "szAddress": "http://acskidd.gov.ua/services/tsp/",
-        "szPort": "80"
-    }
     
     lib_ctx = []
     pk_ctx = []
     
     try:
-        iface.Initialize()
-        
-        dSettings = {}
-        dSettings["bUseCMP"] = True
-        dSettings["szAddress"] = "http://uakey.com.ua/services/cmp/"
-        dSettings["szPort"] = "80"
-        dSettings["szCommonName"] = ""
-        iface.SetCMPSettings(dSettings)
-        
-        dSettings = {}
-        dSettings["bUseOCSP"] = True
-        dSettings["bBeforeStore"] = False
-        dSettings["szAddress"] = "http://uakey.com.ua/services/ocsp"
-        dSettings["szPort"] = "80"
-        iface.SetOCSPSettings(dSettings)
-        
-        dSettings = {}
-        dSettings["bGetStamps"] = True
-        dSettings["szAddress"] = "http://acskidd.gov.ua/services/tsp/"
-        dSettings["szPort"] = "80"
-        iface.SetTSPSettings(tsp_settings)
         iface.CtxCreate(lib_ctx)
         
-        # 1) выбрать alias из JKS
         alias_out = []
         idx = 0
         chosen_alias = None
@@ -79,7 +60,7 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
                 idx += 1
         
         if not chosen_alias:
-            raise ValueError("В JKS не найден ни один приватный ключ (alias).")
+            raise ValueError("In JKS not find privet key (alias).")
         
         # 2) извлечь приватный ключ из JKS для выбранного alias
         pk_blob_out = []
@@ -103,7 +84,7 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
         )
         
         if not cert_bytes_out or not cert_bytes_out[0]:
-            raise RuntimeError("Не удалось получить собственный сертификат из ключа")
+            raise RuntimeError("Error get certificate")
         
         cert_bytes = cert_bytes_out[0]
         cert_info2 = {}
@@ -111,7 +92,7 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
         key_type = cert_info2.get('dwPublicKeyType')
         
         if key_type is None:
-            raise RuntimeError(f"Не удалось распарсить сертификат: {cert_info2}")
+            raise RuntimeError(f"Error parsing certificate {cert_info2}")
         
         # 5) подобрать алгоритмы по типу ключа
         if key_type == EU_CERT_KEY_TYPE_ECDSA:
@@ -124,16 +105,14 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
             sign_algo = EU_CTX_SIGN_DSTU4145_WITH_DSTU7564
             hash_algo = EU_CTX_HASH_ALGO_DSTU7564_256
         else:
-            raise ValueError("Неподдерживаемый тип ключа в сертификате")
+            raise ValueError("Unsupported type key in certificate")
         
         # 6) хэширование данных файла
         digest_out = []
         iface.CtxHashData(lib_ctx[0], hash_algo, None, 0, file_data, len(file_data), digest_out)
         
         if not digest_out or not digest_out[0]:
-            raise RuntimeError("Не удалось получить digest файла")
-        
-        print("Digest length:", len(digest_out[0]))
+            raise RuntimeError("Error get digest file")
         
         # 7) создание подписи CAdES-X Long с метками времени
         signer = []
@@ -166,10 +145,7 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
             final_signer = signer[0]
 
         # 9) Собрать контейнер: пустая подпись данных -> добавить signer
-        # empty_sign_str, empty_sign_bytes = [], []
-        # iface.CreateEmptySign(file_data, len(file_data), empty_sign_str, empty_sign_bytes)
-
-        output_filename = file_path + ".p7s"
+        output_filename = target_file_path + ".p7s"
         # создаём "пустую" подпись-файл под исходный файл (detached)
         iface.CtxCreateEmptySignFile(
 			lib_ctx[0],
@@ -189,10 +165,15 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
 			output_filename      # write to same path
 		)
         
+        if output_dir:
+            output_filename = os.path.join(output_dir, os.path.basename(target_file_path) + ".p7s")
+        else:
+            output_filename = target_file_path + ".p7s"
+        
         with open(output_filename, "rb") as f:
-            signed_blob = f.read()
+            signature_date = f.read()
 
-        return signed_blob, output_filename
+        return signature_date, output_filename
         
     finally:
         # cleanup code...
@@ -207,11 +188,3 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
                 iface.CtxFree(lib_ctx[0])
         except Exception:
             pass
-        
-        try:
-            iface.Finalize()
-        except Exception:
-            pass
-        
-        EUUnload()
-    
