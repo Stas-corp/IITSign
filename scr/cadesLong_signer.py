@@ -166,27 +166,33 @@ def sign_file_cades_x_long(key_file_path, key_password, file_path):
             final_signer = signer[0]
 
         # 9) Собрать контейнер: пустая подпись данных -> добавить signer
-        empty_sign_str, empty_sign_bytes = [], []
-        iface.CreateEmptySign(file_data, len(file_data), empty_sign_str, empty_sign_bytes)
+        # empty_sign_str, empty_sign_bytes = [], []
+        # iface.CreateEmptySign(file_data, len(file_data), empty_sign_str, empty_sign_bytes)
 
-        final_sign_str, final_sign_bytes = [], []
-
-        # Передаём либо строку предыдущей подписи, либо бинарь (не оба сразу):
-        if empty_sign_str and empty_sign_str[0]:
-            iface.AppendSigner(
-                None,
-                final_signer, len(final_signer),
-                cert_bytes, len(cert_bytes),
-                empty_sign_str[0],   # pszPreviousSign (string)
-                None, 0,
-                final_sign_str, final_sign_bytes
-            )
-        
         output_filename = file_path + ".p7s"
-        with open(output_filename, "wb") as f:
-            f.write(final_sign_str[0])
+        # создаём "пустую" подпись-файл под исходный файл (detached)
+        iface.CtxCreateEmptySignFile(
+			lib_ctx[0],
+			sign_algo,
+			None,
+			cert_bytes, len(cert_bytes),
+			output_filename
+		)
 
-        return final_sign_str[0], output_filename
+		# добавляем CAdES-X Long signer в подпись-файл
+        iface.CtxAppendSignerFile(
+			lib_ctx[0],
+			sign_algo,
+			final_signer, len(final_signer),
+			cert_bytes, len(cert_bytes),
+			output_filename,     # previous sign file
+			output_filename      # write to same path
+		)
+        
+        with open(output_filename, "rb") as f:
+            signed_blob = f.read()
+
+        return signed_blob, output_filename
         
     finally:
         # cleanup code...
