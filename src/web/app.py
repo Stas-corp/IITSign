@@ -30,7 +30,6 @@ class StreamlitApp:
     def __init__(self):
         """Инициализация приложения"""
         self.initialize_session_state()
-        print(st.session_state)
         # self.module_manager = ModuleManager()
         
     def initialize_session_state(self):
@@ -38,6 +37,8 @@ class StreamlitApp:
         
         if "sign_btn" not in st.session_state:
             st.session_state.sign_btn = False
+        if "success_sign" not in st.session_state:
+            st.session_state.success_sign = False
         if 'current_page' not in st.session_state:
             st.session_state.current_page = 'home'
         if 'modules_data' not in st.session_state:
@@ -84,87 +85,48 @@ class StreamlitApp:
     
     def render_home_page(self):
         
-        
-        
         """Главная страница"""
         st.title("⚖️ Пдіпис файлів для ЕС")
         
-        if "is_signing" not in st.session_state:
-            st.session_state.is_signing = False
-        
-        def start_signing():
-            st.session_state.is_signing = True
-        
         st.markdown("---")
-        root_folder = st.text_input(
-            "Введить шлях до локальної папки з документами",
-            value=r"C:\Users\ssamo\Documents\Projects\Ace_11_09_2025_part1",
-            key="root_folder",
-            # disabled=st.session_state.sign_btn
-        )
         
-        key_password = st.text_input(
-            "Пароль к ключу",
-            value=KEY_PASS,
-            type="password",
-            key="key_password"
-            # disabled=st.session_state.sign_btn
-        )
-        
-        
-        if not root_folder:
-            st.error("❌ Вкажіть путь до папки!")
-            st.session_state.push_sign_btn = False
-        if not key_password:
-            st.error("❌ Введіть пароль!")
-            st.session_state.push_sign_btn = False
-        
-        if root_folder and key_password:
-            st.session_state.push_sign_btn = True
+        if not st.session_state.sign_btn:
+            root_folder = st.text_input(
+                "Введіть шлях до локальної папки з документами",
+                value=r"C:\Users\ssamo\Documents\Projects\Ace_11_09_2025_part1",
+                key="root_folder",
+                # disabled=st.session_state.sign_btn
+            )
+            key_password = st.text_input(
+                "Пароль к ключу",
+                type="password",
+                key="key_password"
+                # disabled=st.session_state.sign_btn
+            )
             
-        def sign():
-            st.session_state.sign_btn = True
-
-            start = st.success("✅ Розпочато підпис пакету документів...")
-            info = st.warning('УВАГА!\nНЕ ЗАКРИВАТИ ЦЕ ВІКНО І НЕ ПЕРЕХОДИТИ НА ІНШІ МОДУЛІ ПІСЛЯ СТАРТУ', icon="⚠️")
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            if not root_folder:
+                st.error("❌ Вкажіть путь до папки!")
+                st.session_state.push_sign_btn = False
+            if not key_password:
+                st.error("❌ Введіть пароль!")
+                st.session_state.push_sign_btn = False
             
-            def update_progress(total, done):
-                progress = int(done / total * 100)
-                progress_bar.progress(progress)
-                status_text.text(f"Підписано {done} з {total} документів")
-                
-            with st.spinner("Підписування..."):
-                signer(
-                    root_folder=st.session_state.root_folder,
-                    key_file=st.session_state.key_path,
-                    key_password=st.session_state.key_password,
-                    workers=st.session_state.workers_num,
-                    callback_progress=update_progress
+            if root_folder and key_password:
+                st.session_state.push_sign_btn = True
+            
+            if st.session_state.push_sign_btn:
+                sign_btn = st.button(
+                    "✅ Підписати пакет документів", 
+                    disabled=st.session_state.sign_btn,
+                    key="sign_btn"
                 )
-            
-            start.text("✅ Обробка закінчена!")
-            progress_bar.empty()
-            info.empty()
-            
-            st.session_state.sign_btn = False
+            else:
+                sign_btn = st.button(
+                    "🚫 Підписати пакет документів", 
+                    disabled=True
+                )
         
-        if st.session_state.push_sign_btn:
-            st.button(
-                "✅ Підписати пакет документів", 
-                disabled=st.session_state.sign_btn,
-                on_click=start_signing
-            )
-        else:
-            st.button(
-                "🚫 Підписати пакет документів", 
-                disabled=True
-            )
-            
-        if st.session_state.is_signing:
-            st.session_state.sign_btn = True
-
+        if st.session_state.sign_btn:
             start = st.success("✅ Розпочато підпис пакету документів...")
             info = st.warning('УВАГА!\nНЕ ЗАКРИВАТИ ЦЕ ВІКНО І НЕ ПЕРЕХОДИТИ НА ІНШІ МОДУЛІ ПІСЛЯ СТАРТУ', icon="⚠️")
             progress_bar = st.progress(0)
@@ -183,12 +145,13 @@ class StreamlitApp:
                     workers=st.session_state.workers_num,
                     callback_progress=update_progress
                 )
-            
             start.text("✅ Обробка закінчена!")
             progress_bar.empty()
             info.empty()
             
             st.session_state.sign_btn = False
+            if st.button('Підписати знов'):
+                st.rerun()
             
         # Последние логи
         st.markdown("---")
