@@ -1,9 +1,16 @@
 import os
 import base64
+import platform
 
 from typing import Optional, Tuple
 
-from Modules.EUSignCP import *
+if platform.system() == "Windows":
+    # Для Windows: .pyd + dll
+    from Modules.EUSignCP import *
+elif platform.system() == "Linux":
+    # Для Linux: .so
+    from ModulesUNIX.EUSignCP import *
+    
 from src.sign.signManager import EUSignCPManager
 
 def sign_file_cades_x_long(

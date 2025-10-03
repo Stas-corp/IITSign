@@ -1,14 +1,29 @@
 import os
+import sys
 import threading
 import logging
+import platform
+from pathlib import Path
 
 # Абсолютный путь к каталогу с DLL
-DLL_DIR = r"C:\Users\ssamo\Documents\Projects\IITSign\Modules"
+ROOT_DIR = Path(__file__).resolve().parents[2]
+MODULES_DIR = ROOT_DIR / "Modules"
 
-os.add_dll_directory(DLL_DIR)
-os.environ["PATH"] = DLL_DIR + os.pathsep + os.environ.get("PATH", "")
+sys.path.insert(0, str(ROOT_DIR))
 
-from Modules.EUSignCP import *
+if platform.system() == "Windows":
+    # Для Windows: .pyd + dll
+    MODULES_DIR = ROOT_DIR / "Modules"
+    os.add_dll_directory(str(MODULES_DIR))
+    os.environ["PATH"] = str(MODULES_DIR) + os.pathsep + os.environ.get("PATH", "")
+    from Modules.EUSignCP import *
+elif platform.system() == "Linux":
+    # Для Linux: .so
+    MODULES_DIR = ROOT_DIR / "ModulesUNIX"
+    os.environ["LD_LIBRARY_PATH"] = str(MODULES_DIR) + os.pathsep + os.environ.get("LD_LIBRARY_PATH", "")
+    from ModulesUNIX.EUSignCP import *
+
+
 
 class EUSignCPManager:
     """
