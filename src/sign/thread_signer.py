@@ -1,15 +1,38 @@
 import os
 import time
+import queue
 import logging
 import threading
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 from src.sign.schema import SignTask, SignResult
 from src.sign.signManager import EUSignCPManager
 from src.sign.cadesLong_sign import sign_file_cades_x_long
+
+class DocsSignCounter:
+    def __init__(
+        self, 
+        total_docs: int
+    ):
+        self.total_docs = total_docs
+        self.signed_docs = 0
+    
+    
+    def increment(self, num=1):
+        self.signed_docs += num
+        return self.signed_docs
+    
+    
+    def get_value(self):
+        return (self.total_docs, self.signed_docs)
+    
+    
+    def check_docks_completed(self):
+        return self.signed_docs < self.total_docs
+
 
 class DocumentSigner:
     """
@@ -18,6 +41,7 @@ class DocumentSigner:
     def __init__(self):
         self.manager = EUSignCPManager()
         self.local_lock = threading.Lock()
+        
         
     def sign_single_file(self, task: SignTask) -> SignResult:
         """
@@ -35,7 +59,7 @@ class DocumentSigner:
             )
             
             processing_time = time.time() - start_time
-            
+            task.complet_task.put(1)
             return SignResult(
                 file_path=task.file_path,
                 output_path=output_file,
@@ -52,6 +76,7 @@ class DocumentSigner:
                 error_message=str(e),
                 processing_time=processing_time
             )
+
 
 class BatchSigner:
     """
@@ -84,6 +109,7 @@ class BatchSigner:
         
         return documents
     
+    
     def sign_documents_batch(
         self, 
         root_folder: str, 
@@ -91,16 +117,21 @@ class BatchSigner:
         key_password: str, 
         extensions: List[str],
         output_base_dir: Optional[str] = None,
+        callback_progress: Callable = None
     ) -> List[SignResult]:
         """
         Пакетная подпись документов с многопоточностью
         """
+        progress_queue = queue.Queue()
+        
+        
         documents = self.find_documents_to_sign(root_folder, extensions)
         if not documents:
             logging.warning(f"No documents found in {root_folder}")
             return []
         
-        logging.info(f"Found {len(documents)} documents to sign")
+        docsCounter = DocsSignCounter(len(documents))
+        logging.info(f"Found {docsCounter.total_docs} documents to sign")
         
         tasks = []
         for doc_path in documents:
@@ -114,6 +145,7 @@ class BatchSigner:
                 file_path=doc_path,
                 key_file_path=key_file_path,
                 key_password=key_password,
+                complet_task=progress_queue,
                 output_dir=output_dir
             )
             tasks.append(task)
@@ -124,6 +156,15 @@ class BatchSigner:
                 executor.submit(self.signer.sign_single_file, task): task 
                 for task in tasks
             }
+            
+            while docsCounter.check_docks_completed() or any(f.running() for f in futures):
+                try:
+                    progress_queue.get(timeout=0.2)
+                    docsCounter.increment()
+                    if callback_progress:
+                        callback_progress(*docsCounter.get_value())
+                except queue.Empty:
+                    pass
 
             for future in as_completed(futures):
                 task = futures[future]

@@ -1,10 +1,16 @@
-
+import os
+from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime
 
 import streamlit as st
 
 from src.sign.signer import main as signer
+
+load_dotenv()
+
+KEY = os.getenv("KEY")
+KEY_PASS = os.getenv("PASS")
 
 # Настройка страницы
 st.set_page_config(
@@ -14,9 +20,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-KEYS_FOLDER = Path('src\sign\keys')
+KEYS_FOLDER = Path(r'src\sign\keys')
 KEYS_FILES = {
-    "Ace": Path('pb_3696803611.jks'),
+    "Ace": Path(KEY),
     "Unit": Path('unit.jks')
 }
 
@@ -77,45 +83,113 @@ class StreamlitApp:
                     st.rerun()
     
     def render_home_page(self):
-        if not st.session_state.sign_btn:
-            """Главная страница"""
-            st.title("⚖️ Пдіпис файлів для ЕС")
-            
-            st.markdown("---")
-            root_folder = st.text_input(
-                "Введить шлях до локальної папки з документами",
-                key="root_folder")
-            
-            key_password = st.text_input(
-                "Пароль к ключу", 
-                type="password")
-            
-            
-            if not root_folder:
-                st.error("❌ Вкажіть путь до папки!")
-                st.session_state.push_sign_btn = False
-            if not key_password:
-                st.error("❌ Введіть пароль!")
-                st.session_state.push_sign_btn = False
-            
-            if root_folder and key_password:
-                st.session_state.push_sign_btn = True
-            
-            if st.session_state.push_sign_btn:
-                sign_btn = st.button("✅ Підписати пакет документів")
-            else:
-                sign_btn = st.button("🚫 Підписати пакет документів", disabled=True)
-                
-            if sign_btn:
-                st.session_state.sign_btn = True
-                
-                signer(
-                    root_folder=root_folder,
-                    key_file=st.session_state.key_path,
-                    key_password=key_password,
-                    workers=st.session_state.workers_num
-                )
         
+        
+        
+        """Главная страница"""
+        st.title("⚖️ Пдіпис файлів для ЕС")
+        
+        if "is_signing" not in st.session_state:
+            st.session_state.is_signing = False
+        
+        def start_signing():
+            st.session_state.is_signing = True
+        
+        st.markdown("---")
+        root_folder = st.text_input(
+            "Введить шлях до локальної папки з документами",
+            value=r"C:\Users\ssamo\Documents\Projects\Ace_11_09_2025_part1",
+            key="root_folder",
+            # disabled=st.session_state.sign_btn
+        )
+        
+        key_password = st.text_input(
+            "Пароль к ключу",
+            value=KEY_PASS,
+            type="password",
+            key="key_password"
+            # disabled=st.session_state.sign_btn
+        )
+        
+        
+        if not root_folder:
+            st.error("❌ Вкажіть путь до папки!")
+            st.session_state.push_sign_btn = False
+        if not key_password:
+            st.error("❌ Введіть пароль!")
+            st.session_state.push_sign_btn = False
+        
+        if root_folder and key_password:
+            st.session_state.push_sign_btn = True
+            
+        def sign():
+            st.session_state.sign_btn = True
+
+            start = st.success("✅ Розпочато підпис пакету документів...")
+            info = st.warning('УВАГА!\nНЕ ЗАКРИВАТИ ЦЕ ВІКНО І НЕ ПЕРЕХОДИТИ НА ІНШІ МОДУЛІ ПІСЛЯ СТАРТУ', icon="⚠️")
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def update_progress(total, done):
+                progress = int(done / total * 100)
+                progress_bar.progress(progress)
+                status_text.text(f"Підписано {done} з {total} документів")
+                
+            with st.spinner("Підписування..."):
+                signer(
+                    root_folder=st.session_state.root_folder,
+                    key_file=st.session_state.key_path,
+                    key_password=st.session_state.key_password,
+                    workers=st.session_state.workers_num,
+                    callback_progress=update_progress
+                )
+            
+            start.text("✅ Обробка закінчена!")
+            progress_bar.empty()
+            info.empty()
+            
+            st.session_state.sign_btn = False
+        
+        if st.session_state.push_sign_btn:
+            st.button(
+                "✅ Підписати пакет документів", 
+                disabled=st.session_state.sign_btn,
+                on_click=start_signing
+            )
+        else:
+            st.button(
+                "🚫 Підписати пакет документів", 
+                disabled=True
+            )
+            
+        if st.session_state.is_signing:
+            st.session_state.sign_btn = True
+
+            start = st.success("✅ Розпочато підпис пакету документів...")
+            info = st.warning('УВАГА!\nНЕ ЗАКРИВАТИ ЦЕ ВІКНО І НЕ ПЕРЕХОДИТИ НА ІНШІ МОДУЛІ ПІСЛЯ СТАРТУ', icon="⚠️")
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def update_progress(total, done):
+                progress = int(done / total * 100)
+                progress_bar.progress(progress)
+                status_text.text(f"Підписано {done} з {total} документів")
+                
+            with st.spinner("Підписування...", show_time=True):
+                signer(
+                    root_folder=st.session_state.root_folder,
+                    key_file=st.session_state.key_path,
+                    key_password=st.session_state.key_password,
+                    workers=st.session_state.workers_num,
+                    callback_progress=update_progress
+                )
+            
+            start.text("✅ Обробка закінчена!")
+            progress_bar.empty()
+            info.empty()
+            
+            st.session_state.sign_btn = False
+            
         # Последние логи
         st.markdown("---")
         st.subheader("📋 Logs")

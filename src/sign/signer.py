@@ -1,5 +1,6 @@
 import time
 import logging
+from typing import Callable
 
 from src.sign.thread_signer import BatchSigner
 
@@ -7,7 +8,8 @@ def main(
     root_folder: str,
     key_file: str,
     key_password: str, 
-    workers: int = 10
+    workers: int = 10,
+    callback_progress: Callable = None
 ):
     logging.basicConfig(
         level=logging.INFO, 
@@ -22,7 +24,8 @@ def main(
             root_folder=root_folder,
             key_file_path=key_file,
             key_password=key_password,
-            extensions=['.pdf']
+            extensions=['.pdf'],
+            callback_progress=callback_progress
         )
         
         # Статистика

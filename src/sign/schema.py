@@ -1,11 +1,15 @@
+from queue import Queue
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Union
 
 class SignTask(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     file_path: Union[str, Path]
     key_file_path: Union[str, Path]
     key_password: str
+    complet_task: Queue
     output_dir: Optional[str] = None
 
 
