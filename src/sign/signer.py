@@ -1,14 +1,17 @@
 import time
 import logging
-from typing import Callable
+from pathlib import Path
+from typing import Callable, Union
 
 from src.sign.thread_signer import BatchSigner
 
 def main(
     root_folder: str,
     key_file: str,
+    
     key_password: str, 
     workers: int = 10,
+    cert_file: Union[str, Path] = None,
     callback_progress: Callable = None
 ):
     logging.basicConfig(
@@ -16,7 +19,10 @@ def main(
         format='%(asctime)s - %(levelname)s - %(message)s'
     )        
     
-    batch_signer = BatchSigner(max_workers=workers)
+    batch_signer = BatchSigner(
+        cert_file_path=cert_file,
+        max_workers=workers
+    )
     start_time = time.time()
     try:
         # Выполнение пакетной подписи

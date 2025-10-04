@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime
@@ -9,9 +10,6 @@ from src.sign.signer import main as signer
 
 load_dotenv()
 
-KEY = os.getenv("KEY")
-KEY_PASS = os.getenv("PASS")
-
 # Настройка страницы
 st.set_page_config(
     page_title="ASVP",
@@ -20,10 +18,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+KEYS_FILES = dict(json.loads(os.getenv("ALL_KEYS")))
+# KEY = os.getenv("KEY")
 KEYS_FOLDER = Path(r'src\sign\keys')
 KEYS_FILES = {
-    "Ace": Path(KEY),
-    "Unit": Path('unit.jks')
+    key: {
+        "key": Path(key), 
+        "sert": Path(sert)} 
+    for key, sert in KEYS_FILES.items()
 }
 
 class StreamlitApp:
@@ -59,7 +61,8 @@ class StreamlitApp:
                 key="company_signer",
             )
             if signer_radio:
-                st.session_state.key_path = KEYS_FOLDER / KEYS_FILES.get(signer_radio)
+                st.session_state.key_path = KEYS_FOLDER / KEYS_FILES[signer_radio]["key"]
+                st.session_state.sert_path = KEYS_FOLDER / KEYS_FILES[signer_radio]["sert"]
                 
             workers_num = st.slider(
                 "Обери кількість потоків:",
@@ -136,11 +139,15 @@ class StreamlitApp:
                 progress = int(done / total * 100)
                 progress_bar.progress(progress)
                 status_text.text(f"Підписано {done} з {total} документів")
-                
+            
+            print(st.session_state.key_path,
+            st.session_state.sert_path)
+            
             with st.spinner("Підписування...", show_time=True):
                 signer(
                     root_folder=st.session_state.root_folder,
                     key_file=st.session_state.key_path,
+                    cert_file=st.session_state.sert_path,
                     key_password=st.session_state.key_password,
                     workers=st.session_state.workers_num,
                     callback_progress=update_progress

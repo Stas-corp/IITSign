@@ -1,6 +1,7 @@
 import os
 import base64
 import platform
+import logging
 
 from typing import Optional, Tuple
 
@@ -13,11 +14,30 @@ elif platform.system() == "Linux":
     
 from src.sign.signManager import EUSignCPManager
 
+
+# def load_certificate(cert_file_path: str) -> bytes:
+#     """
+#     Загрузка сертификата из файла .crt
+#     Поддерживает форматы DER и PEM
+#     """
+#     with open(cert_file_path, 'rb') as f:
+#         cert_data = f.read()
+    
+#     # Если PEM формат - декодируем Base64
+#     if cert_data.startswith(b'-----BEGIN CERTIFICATE-----'):
+#         cert_text = cert_data.decode('utf-8')
+#         cert_base64 = ''.join([line for line in cert_text.split('\n') 
+#                               if not line.startswith('-----')])
+#         cert_data = base64.b64decode(cert_base64)
+    
+#     return cert_data
+
+
 def sign_file_cades_x_long(
     iface: EUSignCPManager,
-    key_file_path: str, 
-    key_password: str, 
-    target_file_path: str, 
+    key_file_path: str,
+    key_password: str,
+    target_file_path: str,
     output_dir: Optional[str] = None
 ) -> Tuple[bytes, str]:
     """
@@ -100,6 +120,16 @@ def sign_file_cades_x_long(
         
         if key_type is None:
             raise RuntimeError(f"Error parsing certificate {cert_info2}")
+        
+        # Загрузка внешнего сертификата
+        # cert_bytes = load_certificate(cert_file_path)
+        
+        # # Парсинг для определения алгоритмов
+        # cert_info = {}
+        # iface.SaveCertificate(cert_bytes, len(cert_bytes))
+        # iface.RefreshFileStore(True)
+        # iface.ParseCertificateEx(cert_bytes, len(cert_bytes), cert_info)
+        # key_type = cert_info.get('dwPublicKeyType')
         
         # 5) подобрать алгоритмы по типу ключа
         if key_type == EU_CERT_KEY_TYPE_ECDSA:

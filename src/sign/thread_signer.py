@@ -4,9 +4,8 @@ import queue
 import logging
 import threading
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 
 from src.sign.schema import SignTask, SignResult
 from src.sign.signManager import EUSignCPManager
@@ -38,9 +37,13 @@ class DocumentSigner:
     """
     Класс для подписи документов с thread-safe операциями
     """
-    def __init__(self):
-        self.manager = EUSignCPManager()
-        self.local_lock = threading.Lock()
+    def __init__(
+        self, 
+        cert_file_path: Union[str, Path] = None,
+    ):
+        self.signManager = EUSignCPManager()
+        if cert_file_path:
+            self.signManager.load_and_check_certificate(cert_file_path)
         
         
     def sign_single_file(self, task: SignTask) -> SignResult:
@@ -51,11 +54,11 @@ class DocumentSigner:
         
         try:
         # with self.local_lock:
-            result_data, output_file = sign_file_cades_x_long(
-                self.manager.iface,
-                task.key_file_path, 
-                task.key_password, 
-                task.file_path
+            _, output_file = sign_file_cades_x_long(
+                iface=self.signManager.iface,
+                key_file_path=task.key_file_path,
+                key_password=task.key_password, 
+                target_file_path=task.file_path
             )
             
             processing_time = time.time() - start_time
@@ -69,6 +72,7 @@ class DocumentSigner:
             
         except Exception as e:
             processing_time = time.time() - start_time
+            logging.error(f"{e}")
             return SignResult(
                 file_path=task.file_path,
                 output_path="",
@@ -82,9 +86,13 @@ class BatchSigner:
     """
     Класс для пакетной подписи документов
     """
-    def __init__(self, max_workers: int = 10):
+    def __init__(
+        self, 
+        cert_file_path: Union[str, Path] = None,
+        max_workers: int = 10
+    ):
         self.max_workers = max_workers
-        self.signer = DocumentSigner()
+        self.signer = DocumentSigner(cert_file_path)
         
     def find_documents_to_sign(
         self, 
@@ -113,7 +121,7 @@ class BatchSigner:
     def sign_documents_batch(
         self, 
         root_folder: str, 
-        key_file_path: str, 
+        key_file_path: Union[str, Path],
         key_password: str, 
         extensions: List[str],
         output_base_dir: Optional[str] = None,
@@ -123,7 +131,6 @@ class BatchSigner:
         Пакетная подпись документов с многопоточностью
         """
         progress_queue = queue.Queue()
-        
         
         documents = self.find_documents_to_sign(root_folder, extensions)
         if not documents:
@@ -151,12 +158,13 @@ class BatchSigner:
             tasks.append(task)
         
         results = []
+        
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = {
                 executor.submit(self.signer.sign_single_file, task): task 
                 for task in tasks
             }
-            
+            logging.info(f"Starting threads")
             while docsCounter.check_docks_completed() or any(f.running() for f in futures):
                 try:
                     progress_queue.get(timeout=0.2)

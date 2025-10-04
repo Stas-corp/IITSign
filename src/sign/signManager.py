@@ -80,7 +80,33 @@ class EUSignCPManager:
         except Exception as e:
             logging.error(f"Failed to initialize EUSignCP: {e}")
             raise
-    
+        
+    def load_and_check_certificate(self, cert_path):
+        try:
+            # 1. Прочитать файл сертификата
+            with open(cert_path, "rb") as f:
+                cert_bytes = f.read()
+            cert_len = len(cert_bytes)
+
+            # 2. Сохранить сертификат в хранилище
+            self.iface.SaveCertificate(cert_bytes, cert_len)
+
+            # 3. Обновить хранилище (перезагрузить список сертификатов)
+            self.iface.RefreshFileStore(True)
+
+            # 4. Проверить загруженный сертификат
+            #    Если сертификат не найден или некорректен, выбросится исключение
+            self.iface.CheckCertificate(cert_bytes, cert_len)
+            self.iface.CheckCertificateByOCSP(cert_bytes, cert_len)
+		
+
+            logging.info("Certificate successfully download and check!")
+            return True
+
+        except Exception as e:
+            logging.error("Error checking certificate:", e)
+            return False
+        
     def __del__(self):
         """Cleanup при завершении"""
         try:

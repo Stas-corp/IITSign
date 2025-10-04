@@ -217,4 +217,6 @@ EUSignPythonAppendixI.doc
 test_main.py
 venv312/
 venv313/
-src/sign/keys/pb_3696803611.jks
+pb_3696803611.jks
+pb_3383614702.jks
+keys/
