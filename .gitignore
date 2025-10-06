@@ -217,6 +217,10 @@ EUSignPythonAppendixI.doc
 test_main.py
 venv312/
 venv313/
-pb_3696803611.jks
-pb_3383614702.jks
-keys/
+
+src/sign/keys/Alla.crt
+.gitignore
+src/sign/keys/Stas.crt
+src/sign/keys/stas.jks
+.gitignore
+src/sign/keys/alla.jks

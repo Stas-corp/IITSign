@@ -56,7 +56,7 @@ def sign_file_cades_x_long(
     
     # Чтение JKS файла
     with open(key_file_path, "rb") as f:
-        jks_bytes = f.read()
+        key_bytes = f.read()
     
     # Чтение файла для подписи
     with open(target_file_path, "rb") as f:
@@ -68,36 +68,46 @@ def sign_file_cades_x_long(
     try:
         iface.CtxCreate(lib_ctx)
         
-        alias_out = []
-        idx = 0
-        chosen_alias = None
+        # alias_out = []
+        # idx = 0
+        # chosen_alias = None
         
-        while True:
-            try:
-                alias_out.clear()
-                iface.EnumJKSPrivateKeys(jks_bytes, len(jks_bytes), idx, alias_out)
-                if not alias_out:
-                    break
-                alias = alias_out[0]
-                chosen_alias = alias
-                break  # берем первый
-            except Exception:
-                break
-            finally:
-                idx += 1
+        # while True:
+        #     try:
+        #         alias_out.clear()
+        #         iface.EnumJKSPrivateKeys(jks_bytes, len(jks_bytes), idx, alias_out)
+        #         if not alias_out:
+        #             break
+        #         alias = alias_out[0]
+        #         chosen_alias = alias
+        #         break  # берем первый
+        #     except Exception:
+        #         break
+        #     finally:
+        #         idx += 1
         
-        if not chosen_alias:
-            raise ValueError("In JKS not find privet key (alias).")
+        # if not chosen_alias:
+        #     logging.error("In JKS not find privet key (alias).")
         
-        # 2) извлечь приватный ключ из JKS для выбранного alias
-        pk_blob_out = []
-        certs_count_out = []
-        iface.GetJKSPrivateKey(jks_bytes, len(jks_bytes), chosen_alias, pk_blob_out, certs_count_out)
-        pk_blob = pk_blob_out[0]
+        # # 2) извлечь приватный ключ из JKS для выбранного alias
+        # pk_blob_out = []
+        # certs_count_out = []
+        # iface.GetJKSPrivateKey(jks_bytes, len(jks_bytes), chosen_alias, pk_blob_out, certs_count_out)
+        # pk_blob = pk_blob_out[0]
         
-        # 3) загрузить приватный ключ в контекст
+        # # 3) загрузить приватный ключ в контекст
+        # owner_info = {}
+        # iface.CtxReadPrivateKeyBinary(lib_ctx[0], pk_blob, len(pk_blob), key_password, pk_ctx, owner_info)
+        
         owner_info = {}
-        iface.CtxReadPrivateKeyBinary(lib_ctx[0], pk_blob, len(pk_blob), key_password, pk_ctx, owner_info)
+        iface.CtxReadPrivateKeyBinary(
+            lib_ctx[0],           # контекст библиотеки
+            key_bytes,            # бинарные данные ZS2 файла
+            len(key_bytes),       # длина данных
+            key_password,         # пароль ключа
+            pk_ctx,              # выходной контекст приватного ключа
+            owner_info           # информация о владельце
+        )
         
         # 4) получить собственный сертификат
         cert_info = {}
