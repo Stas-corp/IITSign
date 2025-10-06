@@ -2,11 +2,12 @@ import os
 import json
 from dotenv import load_dotenv
 from pathlib import Path
-from datetime import datetime
 
 import streamlit as st
 
+from src.utils.utils import remove_signed_files
 from src.sign.signer import main as signer
+
 
 load_dotenv()
 
@@ -47,6 +48,11 @@ class StreamlitApp:
             st.session_state.modules_data = {}
         if 'logs' not in st.session_state:
             st.session_state.logs = []
+        
+        if "dell_sign" in st.session_state:
+            if st.session_state.dell_sign:
+                st.toast("Підписи видалено!", icon="✅")
+                st.session_state.dell_sign = False
     
     def render_sidebar(self):
         """Отрисовка бокового меню"""
@@ -78,13 +84,24 @@ class StreamlitApp:
             with col2:
                 st.subheader("⚡ Швидкі дії")
                 
-                if st.button("❌ Видалити підписи", "sign_dell_button"):
-                    pass
+                @st.dialog("Видалення всіх пдписів")
+                def dell_signs():
+                    st.write("Шлях для видалення:")
+                    st.warning(f"{st.session_state.root_folder}")
+                    ok = st.button("Підтвердити")
+                    if ok:
+                        remove_signed_files(st.session_state.root_folder)
+                        st.session_state.dell_sign = True
+                        st.rerun()
                 
-                if st.button("🗑️ Очистить логи", "log_cleaner_button"):
-                    st.session_state.logs = []
-                    self.add_log("info", "Логі очіщєні")
-                    st.rerun()
+                if st.button("❌ Видалити підписи", "sign_dell_button"):
+                    if st.dialog("Видалення всіх пдписів"):
+                        dell_signs()
+                        
+                # if st.button("🗑️ Очистить логи", "log_cleaner_button"):
+                #     st.session_state.logs = []
+                #     self.add_log("info", "Логі очіщєні")
+                #     st.rerun()
     
     def render_home_page(self):
         
@@ -161,23 +178,23 @@ class StreamlitApp:
                 st.rerun()
             
         # Последние логи
-        st.markdown("---")
-        st.subheader("📋 Logs")
+        # st.markdown("---")
+        # st.subheader("📋 Logs")
         
-        if st.session_state.logs:
-            # Показываем последние 5 записей
-            recent_logs = st.session_state.logs[-5:]
-            for log in reversed(recent_logs):
-                level_color = {
-                    'info': '🔵',
-                    'success': '✅',
-                    'warning': '⚠️',
-                    'error': '❌'
-                }.get(log['level'], '📝')
+        # if st.session_state.logs:
+        #     # Показываем последние 5 записей
+        #     recent_logs = st.session_state.logs[-5:]
+        #     for log in reversed(recent_logs):
+        #         level_color = {
+        #             'info': '🔵',
+        #             'success': '✅',
+        #             'warning': '⚠️',
+        #             'error': '❌'
+        #         }.get(log['level'], '📝')
                 
-                st.write(f"{level_color} **{log['timestamp']}** - {log['message']}")
-        else:
-            st.info("Нема подій")
+        #         st.write(f"{level_color} **{log['timestamp']}** - {log['message']}")
+        # else:
+        #     st.info("Нема подій")
     
     def run(self):
         """Запуск приложения"""

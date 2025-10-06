@@ -13,11 +13,11 @@ def remove_signed_files(
     
     root_path_dir/
     
-    ├── dir/
+    -----├── dir/
     
-    ----├── doc.pdf
+    ----------├── doc.pdf
     
-    ----└──doc.pdf.p7s
+    ----------└──doc.pdf.p7s
     """
     root_path_dir = Path(root_path_dir)
     directories = [item for item in root_path_dir.iterdir() if item.is_dir()]
@@ -153,9 +153,6 @@ def test_jks_container():
         jks_bytes = f.read()
     
     load_and_check_certificate(SignMng.iface, r"src\sign\keys\Stas.crt")
-    
-    
-    
 
 
 # if __name__ == "__main__":
