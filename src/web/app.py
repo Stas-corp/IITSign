@@ -13,8 +13,8 @@ load_dotenv()
 
 # Настройка страницы
 st.set_page_config(
-    page_title="ASVP",
-    page_icon="📄",
+    page_title="Підписи",
+    page_icon="✍️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -86,13 +86,23 @@ class StreamlitApp:
                 
                 @st.dialog("Видалення всіх пдписів")
                 def dell_signs():
-                    st.write("Шлях для видалення:")
-                    st.warning(f"{st.session_state.root_folder}")
-                    ok = st.button("Підтвердити")
-                    if ok:
-                        remove_signed_files(st.session_state.root_folder)
-                        st.session_state.dell_sign = True
-                        st.rerun()
+                    if st.session_state.root_folder != "":
+                        st.write("Шлях для видалення:")
+                        st.success(f"{st.session_state.root_folder}")
+                        st.warning(f"""
+                            ## ⚠️ Увага!
+                            
+                            Буде видалено всі підписи, які знаходятся в кінцевих папках за шляхом!""")
+                        ok = st.button("Підтвердити")
+                        if ok:
+                            remove_signed_files(st.session_state.root_folder)
+                            st.session_state.dell_sign = True
+                            st.rerun()
+                    else:
+                        st.warning("""
+                            ## ⚠️ Не ваказано шлях до папки! 
+                            
+                            Вкажіть шлях в полі на головній сторінці.""")
                 
                 if st.button("❌ Видалити підписи", "sign_dell_button"):
                     if st.dialog("Видалення всіх пдписів"):
@@ -106,14 +116,13 @@ class StreamlitApp:
     def render_home_page(self):
         
         """Главная страница"""
-        st.title("⚖️ Пдіпис файлів для ЕС")
+        st.title("⚖️ Підпис файлів для ЕС")
         
         st.markdown("---")
         
         if not st.session_state.sign_btn:
             root_folder = st.text_input(
                 "Введіть шлях до локальної папки з документами",
-                value=r"C:\Users\ssamo\Documents\Projects\Ace_11_09_2025_part1",
                 key="root_folder",
                 # disabled=st.session_state.sign_btn
             )
@@ -125,7 +134,7 @@ class StreamlitApp:
             )
             
             if not root_folder:
-                st.error("❌ Вкажіть путь до папки!")
+                st.error("❌ Вкажіть шлях до папки!")
                 st.session_state.push_sign_btn = False
             if not key_password:
                 st.error("❌ Введіть пароль!")

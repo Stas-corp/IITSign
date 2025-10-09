@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from src.sign.signManager import EUSignCPManager
@@ -6,28 +7,22 @@ def remove_signed_files(
     root_path_dir
 ):
     """
-    Удаление всех подписей в папке.
-    
-    # Важно! 
-    Схема папок должна быть следующей:
-    
-    root_path_dir/
-    
-    -----├── dir/
-    
-    ----------├── doc.pdf
-    
-    ----------└──doc.pdf.p7s
+    Рекурсивное удаление всех подписей в целевой папке.
     """
+    unlink_files = []
     root_path_dir = Path(root_path_dir)
-    directories = [item for item in root_path_dir.iterdir() if item.is_dir()]
-    for dir in directories:
-        files = [item for item in dir.iterdir() 
-                 if item.is_file() and item.suffix.lower() == ".p7s"]
-        print(f"In dir {dir} files with sign {len(files)}")
-        if files:
-            for f in files:
-                f.unlink()
+    list_path = [item for item in root_path_dir.iterdir()]
+    for path in list_path:
+        if path.is_dir():
+            temp = [item for item in path.iterdir()]
+            for item in temp:
+                list_path.append(item)
+        elif path.is_file() and path.suffix.lower() == ".p7s":
+            unlink_files.append(path)
+    logging.info(f"In dir {root_path_dir} files with sign {len(unlink_files)}")
+    if unlink_files:
+        for f in unlink_files:
+            f.unlink()
                 
 def analyze_jks_detailed(iface, jks_bytes, key_password):
     """
