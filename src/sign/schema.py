@@ -1,3 +1,4 @@
+from io import BytesIO
 from queue import Queue
 from pathlib import Path
 from pydantic import BaseModel, ConfigDict
@@ -7,7 +8,7 @@ class SignTask(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     file_path: Union[str, Path]
-    key_file_path: Union[str, Path]
+    key_file_path: Union[str, Path, BytesIO]
     key_password: str
     complet_task: Queue
     output_dir: Optional[str] = None

@@ -54,7 +54,7 @@ def sign_file_cades_x_long(
     if isinstance(key_password, str):
         key_password = key_password.encode("utf-8")
     
-    # Чтение JKS файла
+    # Чтение key файла
     with open(key_file_path, "rb") as f:
         key_bytes = f.read()
     

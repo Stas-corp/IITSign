@@ -16,7 +16,7 @@ def main(
 ):
     logging.basicConfig(
         level=logging.INFO, 
-        format='%(asctime)s - %(levelname)s - %(message)s'
+        format='%(asctime)s %(levelname)s [%(module)s:%(funcName)s] %(message)s'
     )        
     
     batch_signer = BatchSigner(

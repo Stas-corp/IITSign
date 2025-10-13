@@ -1,7 +1,9 @@
 import os
 import json
-from dotenv import load_dotenv
+import tempfile
+from io import BytesIO
 from pathlib import Path
+from dotenv import load_dotenv
 
 import streamlit as st
 
@@ -25,8 +27,8 @@ KEYS_FOLDER = Path(r'src\sign\keys')
 KEYS_FILES = {
     key: {
         "key": Path(key), 
-        "sert": Path(sert)} 
-    for key, sert in KEYS_FILES.items()
+        "cert": Path(cert)} 
+    for key, cert in KEYS_FILES.items()
 }
 
 class StreamlitApp:
@@ -48,11 +50,26 @@ class StreamlitApp:
             st.session_state.modules_data = {}
         if 'logs' not in st.session_state:
             st.session_state.logs = []
+        if 'user_secrets' not in st.session_state:
+            st.session_state.user_secrets = False
         
-        if "dell_sign" in st.session_state:
-            if st.session_state.dell_sign:
+        if 'key_file' not in st.session_state:
+            st.session_state.key_file = False
+        if 'cert_file' not in st.session_state:
+            st.session_state.cert_file = False
+        
+        if "add_user_secrets" not in st.session_state:
+            st.session_state.add_user_secrets = False
+        
+        if "add_user_secrets_toast" in st.session_state:
+            if st.session_state.add_user_secrets_toast:
+                st.toast("Ключ і сертифікат додано!", icon="✅")
+                st.session_state.add_user_secrets_toast = False
+        
+        if "dell_sign_toast" in st.session_state:
+            if st.session_state.dell_sign_toast:
                 st.toast("Підписи видалено!", icon="✅")
-                st.session_state.dell_sign = False
+                st.session_state.dell_sign_toast = False
     
     def render_sidebar(self):
         """Отрисовка бокового меню"""
@@ -60,15 +77,23 @@ class StreamlitApp:
             st.title("🔑 CAdES-X Long Signer")
 
             st.markdown("---")
-            company_signer = KEYS_FILES.keys()
+            company_signer = list(KEYS_FILES.keys())
+            company_signer.append('Окремий підпис')
             signer_radio = st.radio(
                 "✍️ Компанія підпису ", 
                 company_signer,
                 key="company_signer",
             )
-            if signer_radio:
-                st.session_state.key_path = KEYS_FOLDER / KEYS_FILES[signer_radio]["key"]
-                st.session_state.sert_path = KEYS_FOLDER / KEYS_FILES[signer_radio]["sert"]
+            if signer_radio not in 'Окремий підпис':
+                st.session_state.user_secrets = False
+                st.session_state.add_user_secrets = False
+                st.session_state.key_file = KEYS_FOLDER / KEYS_FILES[signer_radio]["key"]
+                st.session_state.cert_file = KEYS_FOLDER / KEYS_FILES[signer_radio]["cert"]
+            else:
+                st.session_state.user_secrets = True
+                if not st.session_state.add_user_secrets:
+                    st.session_state.key_file = False
+                    st.session_state.cert_file = False
                 
             workers_num = st.slider(
                 "Обери кількість потоків:",
@@ -84,34 +109,69 @@ class StreamlitApp:
             with col2:
                 st.subheader("⚡ Швидкі дії")
                 
-                @st.dialog("Видалення всіх пдписів")
-                def dell_signs():
-                    if st.session_state.root_folder != "":
-                        st.write("Шлях для видалення:")
-                        st.success(f"{st.session_state.root_folder}")
-                        st.warning(f"""
-                            ## ⚠️ Увага!
-                            
-                            Буде видалено всі підписи, які знаходятся в кінцевих папках за шляхом!""")
-                        ok = st.button("Підтвердити")
-                        if ok:
-                            remove_signed_files(st.session_state.root_folder)
-                            st.session_state.dell_sign = True
-                            st.rerun()
-                    else:
-                        st.warning("""
-                            ## ⚠️ Не ваказано шлях до папки! 
-                            
-                            Вкажіть шлях в полі на головній сторінці.""")
-                
-                if st.button("❌ Видалити підписи", "sign_dell_button"):
-                    if st.dialog("Видалення всіх пдписів"):
-                        dell_signs()
+                if st.button("❌ Видалити підписи"):
+                    if st.dialog("Видалення всіх підписів"):
+                        self.dell_signs()
                         
                 # if st.button("🗑️ Очистить логи", "log_cleaner_button"):
                 #     st.session_state.logs = []
                 #     self.add_log("info", "Логі очіщєні")
                 #     st.rerun()
+    @st.dialog("Видалення всіх пдписів")
+    def dell_signs(self):
+        if ("root_folder" in st.session_state and 
+            st.session_state.root_folder != ""
+        ):
+            st.write("Шлях для видалення:")
+            st.success(f"{st.session_state.root_folder}")
+            st.warning(f"""
+                ## ⚠️ Увага!
+                
+                Буде видалено всі підписи, які знаходятся в кінцевих папках за шляхом!""")
+            ok = st.button("Підтвердити")
+            if ok:
+                remove_signed_files(st.session_state.root_folder)
+                st.session_state.dell_sign_toast = True
+                st.rerun()
+        else:
+            st.warning("""
+                ## ⚠️ Не ваказано шлях до папки! 
+                
+                Вкажіть шлях в полі на головній сторінці.""")
+    
+    @st.dialog("Завантажте файли для підпису")   
+    def download_secrets(self):
+        cert_file = st.file_uploader(
+            "Файл сертифіката", 
+            type=["crt"], 
+        )
+        key_file = st.file_uploader(
+            "Файл ключа", 
+            type=["ZS2", "JKS"], 
+        )
+        
+        def save_uploaded_to_disk(uploaded_file) -> Path:
+            """
+            Сохраняет st.file_uploader UploadedFile во временный файл и возвращает pathlib.Path.
+            """
+            suffix = Path(uploaded_file.name).suffix  # сохраняем исходное расширение
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp.write(uploaded_file.getvalue())       # или uploaded_file.read()
+            tmp.flush()
+            tmp.close()
+            return Path(tmp.name)
+        
+        if cert_file and key_file:
+            st.success("✅ Обидва файли успішно завантажено!")
+            if st.button("➡️ Продовжити"):
+                st.session_state.cert_file = save_uploaded_to_disk(cert_file)
+                st.session_state.key_file = save_uploaded_to_disk(key_file)
+                st.session_state.add_user_secrets = True
+                st.session_state.add_user_secrets_toast = True
+                st.rerun()
+        else:
+            st.warning("⚠️ Завантажте обидва файли, щоб продовжити.")
+    
     
     def render_home_page(self):
         
@@ -120,40 +180,52 @@ class StreamlitApp:
         
         st.markdown("---")
         
-        if not st.session_state.sign_btn:
-            root_folder = st.text_input(
-                "Введіть шлях до локальної папки з документами",
-                key="root_folder",
-                # disabled=st.session_state.sign_btn
-            )
-            key_password = st.text_input(
-                "Пароль к ключу",
-                type="password",
-                key="key_password"
-                # disabled=st.session_state.sign_btn
-            )
-            
-            if not root_folder:
-                st.error("❌ Вкажіть шлях до папки!")
-                st.session_state.push_sign_btn = False
-            if not key_password:
-                st.error("❌ Введіть пароль!")
-                st.session_state.push_sign_btn = False
-            
-            if root_folder and key_password:
-                st.session_state.push_sign_btn = True
-            
-            if st.session_state.push_sign_btn:
-                sign_btn = st.button(
-                    "✅ Підписати пакет документів", 
-                    disabled=st.session_state.sign_btn,
-                    key="sign_btn"
-                )
+        if st.session_state.user_secrets:
+            if st.session_state.key_file and st.session_state.cert_file:
+                st.success("✅ Ключ і сертифікат завантажено!")
             else:
-                sign_btn = st.button(
-                    "🚫 Підписати пакет документів", 
-                    disabled=True
+                st.warning("⚠️ Необхідно завантажити ключ і сертифікат")
+            load_secret = st.button("🔑 Завантажити ключ і сертифікат")
+            if load_secret:
+                self.download_secrets()
+        
+        print(st.session_state.key_file, st.session_state.cert_file)
+        
+        if st.session_state.key_file and st.session_state.cert_file:
+            if not st.session_state.sign_btn:
+                root_folder = st.text_input(
+                    "Введіть шлях до локальної папки з документами",
+                    key="root_folder",
+                    # disabled=st.session_state.sign_btn
                 )
+                key_password = st.text_input(
+                    "Пароль к ключу",
+                    type="password",
+                    key="key_password"
+                    # disabled=st.session_state.sign_btn
+                )
+                
+                if not root_folder:
+                    st.error("❌ Вкажіть шлях до папки!")
+                    st.session_state.push_sign_btn = False
+                if not key_password:
+                    st.error("❌ Введіть пароль!")
+                    st.session_state.push_sign_btn = False
+                
+                if root_folder and key_password:
+                    st.session_state.push_sign_btn = True
+                
+                if st.session_state.push_sign_btn:
+                    sign_btn = st.button(
+                        "✅ Підписати пакет документів", 
+                        disabled=st.session_state.sign_btn,
+                        key="sign_btn"
+                    )
+                else:
+                    sign_btn = st.button(
+                        "🚫 Підписати пакет документів", 
+                        disabled=True
+                    )
         
         if st.session_state.sign_btn:
             start = st.success("✅ Розпочато підпис пакету документів...")
@@ -166,14 +238,14 @@ class StreamlitApp:
                 progress_bar.progress(progress)
                 status_text.text(f"Підписано {done} з {total} документів")
             
-            print(st.session_state.key_path,
-            st.session_state.sert_path)
+            print(st.session_state.key_file,
+            st.session_state.cert_file)
             
             with st.spinner("Підписування...", show_time=True):
                 signer(
                     root_folder=st.session_state.root_folder,
-                    key_file=st.session_state.key_path,
-                    cert_file=st.session_state.sert_path,
+                    key_file=st.session_state.key_file,
+                    cert_file=st.session_state.cert_file,
                     key_password=st.session_state.key_password,
                     workers=st.session_state.workers_num,
                     callback_progress=update_progress
@@ -207,6 +279,12 @@ class StreamlitApp:
     
     def run(self):
         """Запуск приложения"""
+        st.set_page_config(
+            page_title="Підписи",
+            page_icon="✍️",
+            layout="wide",
+            initial_sidebar_state="expanded"
+        )
         self.render_sidebar()
         if st.session_state.current_page == 'home':
             self.render_home_page()
