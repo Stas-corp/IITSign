@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  iitsign:
+    build: .
+    container_name: iitsign-app
+    ports:
+      - "63370:63370"                # Проброс порта Streamlit
+    env_file:
+      - .env                       # Переменные окружения
+    volumes:
+      - "C:\\Users\\ssamo\\Documents:C:\\app\\data"  # <-- bind mount: путь на хосте → путь в контейнере
+    restart: unless-stopped

@@ -1,34 +1,37 @@
-FROM python:3.11-slim
+# Используйте совместимый базовый образ Windows с нужной версией Python
+FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
 
-# Установка системных зависимостей
-RUN apt-get update && apt-get install -y \
-    libc6 \
-    libgcc-s1 \
-    libstdc++6 \
-    && rm -rf /var/lib/apt/lists/*
+SHELL ["pwsh", "-Command"]
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12; \
+    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Устанавливаем Python 3.12 через Chocolatey
+RUN choco install python --version=3.12.0 -y
+
+# Обновляем PATH, чтобы использовать установленный Python
+ENV PATH="C:\\Python312;C:\\Python312\\Scripts;${PATH}"
 
 # Создание рабочей директории
-WORKDIR /app
+WORKDIR C:\\app
 
-# Копирование файлов проекта
-COPY . .
+# Копирование requirements-файла
+COPY requieremnts.txt requieremnts.txt
 
-# Установка Python зависимостей
+# Установка зависимостей Python
 RUN pip install --no-cache-dir -r requieremnts.txt
 
-# Создание директорий для данных
-RUN mkdir -p /app/data /app/src/sign/keys
+# Создание директорий для данных и ключей (используйте PowerShell)
+RUN New-Item -ItemType Directory -Path C:\\app\\data, C:\\app\\src\\sign\\keys, C:\\app\\eusigncp_store\\Certificates -Force
+
+# Копирование всех файлов проекта
+COPY . .
 
 # Настройка переменных окружения
-ENV LD_LIBRARY_PATH=/app/ModulesUNIX:$LD_LIBRARY_PATH
-ENV DLL_DIR=/app/ModulesUNIX
-ENV PYTHONPATH=/app
-ENV KEY=pb_3696803611.jks
-ENV PASS=LALA2108
-ENV STREAMLIT_SERVER_PORT=63370
-ENV STREAMLIT_SERVER_ADDRESS=0.0.0.0
+ENV DLL_DIR="C:\\app\\Modules"
+ENV PYTHONPATH="C:\\app"
 
-# Открытие порта
+# Открытие порта (добавьте в docker-compose.yml)
 EXPOSE 63370
 
 # Команда запуска
