@@ -236,13 +236,13 @@ class StreamlitApp:
             def update_progress(total, done):
                 progress = int(done / total * 100)
                 progress_bar.progress(progress)
-                status_text.text(f"Підписано {done} з {total} документів")
+                status_text.text(f"Опрацьовано {done} з {total} документів")
             
             print(st.session_state.key_file,
             st.session_state.cert_file)
             
             with st.spinner("Підписування...", show_time=True):
-                signer(
+                result = signer(
                     root_folder=st.session_state.root_folder,
                     key_file=st.session_state.key_file,
                     cert_file=st.session_state.cert_file,
@@ -251,6 +251,7 @@ class StreamlitApp:
                     callback_progress=update_progress
                 )
             start.text("✅ Обробка закінчена!")
+            st.success(result)
             progress_bar.empty()
             info.empty()
             

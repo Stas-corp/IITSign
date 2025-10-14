@@ -111,15 +111,15 @@ class BatchSigner:
         
         directories = [item for item in root_path.iterdir() if item.is_dir()]
         for dir in directories:
-            files = [str(item) for item in dir.iterdir() 
-                    if item.is_file() and item.suffix.lower() in extensions]
+            unsigned_files = []
+            for file in dir.iterdir():
+                if file.is_file() and file.suffix.lower() in extensions:
+                    signature_file = file.with_suffix(file.suffix + '.p7s')
+                    if not signature_file.exists():
+                        unsigned_files.append(file)
             
-            for file in files:
-                signature_file = file.with_suffix(file.suffix + '.p7s')
-                if not signature_file.exists():
-                    documents.append(str(file))
-            print(f"In dir {dir} files with sign {len(documents)}")
-            documents.extend(files)
+            print(f"In dir {dir} files with sign {len(unsigned_files)}")
+            documents.extend(str(f) for f in unsigned_files)
         
         return documents
     

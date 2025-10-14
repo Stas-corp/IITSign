@@ -38,10 +38,21 @@ def main(
         successful = len([r for r in results if r.success])
         failed = len([r for r in results if not r.success])
         
-        logging.info(f"Batch signing completed:")
-        logging.info(f"  Successful: {successful}")
-        logging.info(f"  Failed: {failed}")
-        logging.info(f"  Total time: {time.time() - start_time:.2f}s")
+        message = f"""
+        Batch signing completed:
+        
+        Successful: {successful}
+        
+        Failed: {failed}
+        
+        Total time: {time.time() - start_time:.2f}s
+        """
+        
+        
         
     except Exception as e:
-        logging.error(f"Batch signing failed: {e}")
+        message = f"Batch signing failed: {e}"
+        
+    finally:
+        logging.info(message)
+        return message
