@@ -72,7 +72,8 @@ class DocumentSigner:
             
         except Exception as e:
             processing_time = time.time() - start_time
-            logging.error(f"{e}")
+            task.complet_task.put(1)
+            logging.error(f"Error sign CAdES-X Long: {e}")
             return SignResult(
                 file_path=task.file_path,
                 output_path="",
@@ -112,7 +113,12 @@ class BatchSigner:
         for dir in directories:
             files = [str(item) for item in dir.iterdir() 
                     if item.is_file() and item.suffix.lower() in extensions]
-            print(f"In dir {dir} files with sign {len(files)}")
+            
+            for file in files:
+                signature_file = file.with_suffix(file.suffix + '.p7s')
+                if not signature_file.exists():
+                    documents.append(str(file))
+            print(f"In dir {dir} files with sign {len(documents)}")
             documents.extend(files)
         
         return documents
