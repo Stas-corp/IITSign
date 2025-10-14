@@ -186,10 +186,10 @@ class BatchSigner:
                     result = future.result()
                     results.append(result)
                     
-                    if result.success:
-                        logging.info(f"✓ Signed: {result.file_path} ({result.processing_time:.2f}s)")
-                    else:
-                        logging.error(f"✗ Failed: {result.file_path} - {result.error_message}")
+                    # if result.success:
+                    #     logging.info(f"✓ Signed: {result.file_path} ({result.processing_time:.2f}s)")
+                    # else:
+                    #     logging.error(f"✗ Failed: {result.file_path} - {result.error_message}")
                         
                 except Exception as e:
                     logging.error(f"✗ Exception for {task.file_path}: {e}")
