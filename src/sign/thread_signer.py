@@ -61,7 +61,8 @@ class DocumentSigner:
                     iface=self.signManager.iface,
                     key_file_path=task.key_file_path,
                     key_password=task.key_password, 
-                    target_file_path=task.file_path
+                    target_file_path=task.file_path,
+                    sign_Long_type=task.sign_Long_type
                 )
                 
                 processing_time = time.time() - start_time
@@ -151,7 +152,8 @@ class BatchSigner:
     
     def sign_documents_batch(
         self, 
-        root_folder: str, 
+        root_folder: str,
+        sign_Long_type: bool,
         key_file_path: Union[str, Path],
         key_password: str, 
         extensions: List[str],
@@ -184,6 +186,7 @@ class BatchSigner:
                 key_file_path=key_file_path,
                 key_password=key_password,
                 complet_task=progress_queue,
+                sign_Long_type=sign_Long_type,
                 output_dir=output_dir,
                 atempts=0
             )

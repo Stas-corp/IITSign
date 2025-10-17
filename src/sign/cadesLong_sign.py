@@ -17,7 +17,9 @@ def sign_file_cades_x_long(
     key_file_path: str,
     key_password: str,
     target_file_path: str,
-    output_dir: Optional[str] = None
+    sign_Long_type: bool,
+    output_dir: Optional[str] = None,
+    
 ) -> Tuple[bytes, str]:
     """
     Функция подписи файла.
@@ -29,7 +31,6 @@ def sign_file_cades_x_long(
     и инстант класса `EUSignCPManager`
     (инициализация библиотеки внутри)
     """
-    
     if isinstance(key_password, str):
         key_password = key_password.encode("utf-8")
     
@@ -40,6 +41,11 @@ def sign_file_cades_x_long(
     # Чтение файла для подписи
     with open(target_file_path, "rb") as f:
         file_data = f.read()
+    
+    if sign_Long_type:
+        sign_type = EU_SIGN_TYPE_CADES_X_LONG  # Тип подписи CAdES-X Long
+    else: 
+        sign_type = EU_SIGN_TYPE_CADES_BES
     
     lib_ctx = []
     pk_ctx = []
@@ -106,7 +112,7 @@ def sign_file_cades_x_long(
             sign_algo,
             digest_out[0], len(digest_out[0]),
             False,  # bNoContentTimeStamp = False для включения меток времени
-            EU_SIGN_TYPE_CADES_X_LONG,  # Тип подписи CAdES-X Long
+            sign_type,  # Тип подписи CAdES-X Long
             signer
         )
 
@@ -116,7 +122,7 @@ def sign_file_cades_x_long(
             None,
             signer[0], len(signer[0]),
             cert_bytes, len(cert_bytes),
-            EU_SIGN_TYPE_CADES_X_LONG,
+            sign_type,
             up_signer_str, up_signer_bytes
         )
 
@@ -140,7 +146,7 @@ def sign_file_cades_x_long(
 			output_filename
 		)
 
-		# добавляем CAdES-X Long signer в подпись-файл
+		# добавляем тип подписи signer в подпись-файл
         """
         pvContext:			object,	// Вхідний. Показчик на контекст 
 								// бібліотеки

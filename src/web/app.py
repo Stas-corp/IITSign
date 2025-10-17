@@ -94,8 +94,14 @@ class StreamlitApp:
                 if not st.session_state.add_user_secrets:
                     st.session_state.key_file = False
                     st.session_state.cert_file = False
-                
-            workers_num = st.slider(
+            
+            st.checkbox(
+                "Використовувати CAdES-X Long підпис",
+                value=False,
+                key="is_long_sign"
+            )
+            
+            st.slider(
                 "Обери кількість потоків:",
                 min_value=1,
                 max_value=48,
@@ -216,13 +222,13 @@ class StreamlitApp:
                     st.session_state.push_sign_btn = True
                 
                 if st.session_state.push_sign_btn:
-                    sign_btn = st.button(
+                    st.button(
                         "✅ Підписати пакет документів", 
                         disabled=st.session_state.sign_btn,
                         key="sign_btn"
                     )
                 else:
-                    sign_btn = st.button(
+                    st.button(
                         "🚫 Підписати пакет документів", 
                         disabled=True
                     )
@@ -245,6 +251,7 @@ class StreamlitApp:
                 result = signer(
                     root_folder=st.session_state.root_folder,
                     key_file=st.session_state.key_file,
+                    is_Long_sign=st.session_state.is_long_sign,
                     cert_file=st.session_state.cert_file,
                     key_password=st.session_state.key_password,
                     workers=st.session_state.workers_num,

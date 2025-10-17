@@ -8,7 +8,7 @@ from src.sign.thread_signer import BatchSigner
 def main(
     root_folder: str,
     key_file: str,
-    
+    is_Long_sign: bool,
     key_password: str, 
     workers: int = 10,
     cert_file: Union[str, Path] = None,
@@ -16,13 +16,15 @@ def main(
 ):   
     batch_signer = BatchSigner(
         cert_file_path=cert_file,
-        max_workers=workers
+        max_workers=workers,
+        atempts=1
     )
     start_time = time.time()
     try:
         # Выполнение пакетной подписи
         results = batch_signer.sign_documents_batch(
             root_folder=root_folder,
+            sign_Long_type=is_Long_sign,
             key_file_path=key_file,
             key_password=key_password,
             extensions=['.pdf'],

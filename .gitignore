@@ -224,3 +224,6 @@ src/sign/keys/Stas.crt
 src/sign/keys/stas.jks
 .gitignore
 src/sign/keys/alla.jks
+request.json
+response.json
+debug_verify_digest.py
