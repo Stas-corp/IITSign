@@ -65,7 +65,7 @@ class EUSignCPManager:
             dSettings = {}
             dSettings["bUseOCSP"] = True
             dSettings["bBeforeStore"] = False
-            dSettings["szAddress"] = "http://uakey.com.ua/services/ocsp"
+            dSettings["szAddress"] = "http://uakey.com.ua/services/ocsp/"
             dSettings["szPort"] = "80"
             self.iface.SetOCSPSettings(dSettings)
             
@@ -104,8 +104,32 @@ class EUSignCPManager:
             return True
 
         except Exception as e:
-            logging.error("Error checking certificate:", e)
+            e = e.args[0]
+            logging.error(f"Error checking certificate: {e["ErrorDesc"].decode()}")
             return False
+        
+    def load_folder_certificate(
+        self, 
+        cert_path_folder: str,
+        extensions = [".cer", ".crt"]
+    ):
+        
+        print('Start load certificate')
+        certificates = []
+        def scan_dir(path: Path):
+            # Перебор всех элементов в текущей папке
+            for item in path.iterdir():
+                if item.is_dir():
+                    # Рекурсивно обходим подпапку
+                    print(item)
+                    scan_dir(item)
+                elif item.is_file() and item.suffix.lower() in extensions:
+                    certificates.append(str(item))
+        
+        path = Path(cert_path_folder)
+        scan_dir(path)
+        for cer in certificates:
+            self.load_and_check_certificate(cer)
         
     def __del__(self):
         """Cleanup при завершении"""

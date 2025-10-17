@@ -6,32 +6,11 @@ import logging
 from typing import Optional, Tuple
 
 if platform.system() == "Windows":
-    # Для Windows: .pyd + dll
     from Modules.EUSignCP import *
 elif platform.system() == "Linux":
-    # Для Linux: .so
     from ModulesUNIX.EUSignCP import *
     
 from src.sign.signManager import EUSignCPManager
-
-
-# def load_certificate(cert_file_path: str) -> bytes:
-#     """
-#     Загрузка сертификата из файла .crt
-#     Поддерживает форматы DER и PEM
-#     """
-#     with open(cert_file_path, 'rb') as f:
-#         cert_data = f.read()
-    
-#     # Если PEM формат - декодируем Base64
-#     if cert_data.startswith(b'-----BEGIN CERTIFICATE-----'):
-#         cert_text = cert_data.decode('utf-8')
-#         cert_base64 = ''.join([line for line in cert_text.split('\n') 
-#                               if not line.startswith('-----')])
-#         cert_data = base64.b64decode(cert_base64)
-    
-#     return cert_data
-
 
 def sign_file_cades_x_long(
     iface: EUSignCPManager,
@@ -68,37 +47,6 @@ def sign_file_cades_x_long(
     try:
         iface.CtxCreate(lib_ctx)
         
-        # alias_out = []
-        # idx = 0
-        # chosen_alias = None
-        
-        # while True:
-        #     try:
-        #         alias_out.clear()
-        #         iface.EnumJKSPrivateKeys(jks_bytes, len(jks_bytes), idx, alias_out)
-        #         if not alias_out:
-        #             break
-        #         alias = alias_out[0]
-        #         chosen_alias = alias
-        #         break  # берем первый
-        #     except Exception:
-        #         break
-        #     finally:
-        #         idx += 1
-        
-        # if not chosen_alias:
-        #     logging.error("In JKS not find privet key (alias).")
-        
-        # # 2) извлечь приватный ключ из JKS для выбранного alias
-        # pk_blob_out = []
-        # certs_count_out = []
-        # iface.GetJKSPrivateKey(jks_bytes, len(jks_bytes), chosen_alias, pk_blob_out, certs_count_out)
-        # pk_blob = pk_blob_out[0]
-        
-        # # 3) загрузить приватный ключ в контекст
-        # owner_info = {}
-        # iface.CtxReadPrivateKeyBinary(lib_ctx[0], pk_blob, len(pk_blob), key_password, pk_ctx, owner_info)
-        
         owner_info = {}
         iface.CtxReadPrivateKeyBinary(
             lib_ctx[0],           # контекст библиотеки
@@ -109,7 +57,7 @@ def sign_file_cades_x_long(
             owner_info           # информация о владельце
         )
         
-        # 4) получить собственный сертификат
+        # получить собственный сертификат
         cert_info = {}
         cert_bytes_out = []
         iface.CtxGetOwnCertificate(
@@ -131,17 +79,7 @@ def sign_file_cades_x_long(
         if key_type is None:
             raise RuntimeError(f"Error parsing certificate {cert_info2}")
         
-        # Загрузка внешнего сертификата
-        # cert_bytes = load_certificate(cert_file_path)
-        
-        # # Парсинг для определения алгоритмов
-        # cert_info = {}
-        # iface.SaveCertificate(cert_bytes, len(cert_bytes))
-        # iface.RefreshFileStore(True)
-        # iface.ParseCertificateEx(cert_bytes, len(cert_bytes), cert_info)
-        # key_type = cert_info.get('dwPublicKeyType')
-        
-        # 5) подобрать алгоритмы по типу ключа
+        # подобрать алгоритмы по типу ключа
         if key_type == EU_CERT_KEY_TYPE_ECDSA:
             sign_algo = EU_CTX_SIGN_ECDSA_WITH_SHA
             hash_algo = EU_CTX_HASH_ALGO_SHA256
@@ -154,14 +92,14 @@ def sign_file_cades_x_long(
         else:
             raise ValueError("Unsupported type key in certificate")
         
-        # 6) хэширование данных файла
+        # хэширование данных файла
         digest_out = []
         iface.CtxHashData(lib_ctx[0], hash_algo, None, 0, file_data, len(file_data), digest_out)
         
         if not digest_out or not digest_out[0]:
             raise RuntimeError("Error get digest file")
         
-        # 7) создание подписи CAdES-X Long с метками времени
+        # создание подписи CAdES-X Long с метками времени
         signer = []
         iface.CtxCreateSignerEx(
             pk_ctx[0],
@@ -172,11 +110,11 @@ def sign_file_cades_x_long(
             signer
         )
 
-        # 8) Добавить валидационные данные К SIGNER (не к всей подписи!)
+        # Добавить валидационные данные К SIGNER (не к всей подписи!)
         up_signer_str, up_signer_bytes = [], []
         iface.AppendValidationDataToSignerEx(
-            None,                  # pszPreviousSigner (если signer в base64-строке; у нас bytes)
-            signer[0], len(signer[0]),   # pbPreviousSigner, len
+            None,
+            signer[0], len(signer[0]),
             cert_bytes, len(cert_bytes),
             EU_SIGN_TYPE_CADES_X_LONG,
             up_signer_str, up_signer_bytes
@@ -187,11 +125,11 @@ def sign_file_cades_x_long(
             final_signer = up_signer_bytes[0]
         elif up_signer_str and up_signer_str[0]:
             final_signer = base64.b64decode(up_signer_str[0])
-        else:
-            # если сервисы TSP/OCSP не ответили, можно использовать исходный raw_signer как fallback
-            final_signer = signer[0]
-
-        # 9) Собрать контейнер: пустая подпись данных -> добавить signer
+        # else:
+        #     # если сервисы TSP/OCSP не ответили, можно использовать исходный raw_signer как fallback
+        #     final_signer = signer[0]
+        
+        # Собрать контейнер: пустая подпись данных -> добавить signer
         output_filename = target_file_path + ".p7s"
         # создаём "пустую" подпись-файл под исходный файл (detached)
         iface.CtxCreateEmptySignFile(
@@ -203,13 +141,42 @@ def sign_file_cades_x_long(
 		)
 
 		# добавляем CAdES-X Long signer в подпись-файл
+        """
+        pvContext:			object,	// Вхідний. Показчик на контекст 
+								// бібліотеки
+		dwSignAlgo:			long,		// Вхідний. Алгоритм підпису, повинен
+								// відповідати алгоритму попереднього 
+								// підпису
+		pbSigner:			bytes,	// Вхідний. Інформація про 
+								// підписувача у вигляді масиву байт
+		dwSignerLength:		long,		// Вхідний. Розмір інформації 
+								// про підписувача у вигляді масиву
+								// байт
+		pbCertificate:		bytes,	// Вхідний. Сертифікат підписувача.
+								// Якщо параметр дорівнює None
+								// сертифікат до підпису не додається
+		dwCertificateLength:	long,		// Вхідний. Розмір
+								// сертифіката підписувача.
+		pszFileNameWithPreviousSign:	str,	// Вхідний. Ім’я 
+								// файлу з попереднім підписом
+								// (якщо тип підпису зовнішній)
+								// або підписаними даними 
+								// (якщо тип підпису внутрішній)
+		pszFileNameWithSign:	str)		// Вхідний. Ім’я файлу, в 
+								// який необхідно записати 
+								// підпис (якщо тип підпису 
+								// зовнішній) або підписані дані 
+								// (якщо тип підпису внутрішній)
+        """
         iface.CtxAppendSignerFile(
-			lib_ctx[0],
+			lib_ctx[0], 
 			sign_algo,
-			final_signer, len(final_signer),
-			cert_bytes, len(cert_bytes),
-			output_filename,     # previous sign file
-			output_filename      # write to same path
+			final_signer, 
+            len(final_signer),
+			cert_bytes, 
+            len(cert_bytes),
+			output_filename,
+			output_filename
 		)
         
         if output_dir:
@@ -223,7 +190,6 @@ def sign_file_cades_x_long(
         return signature_date, output_filename
         
     finally:
-        # cleanup code...
         try:
             if pk_ctx:
                 iface.CtxFreePrivateKey(pk_ctx[0])

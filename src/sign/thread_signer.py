@@ -39,8 +39,11 @@ class DocumentSigner:
     """
     def __init__(
         self, 
+        atempts: int,
         cert_file_path: Union[str, Path] = None,
+        
     ):
+        self.atempts = atempts
         self.signManager = EUSignCPManager()
         if cert_file_path:
             self.signManager.load_and_check_certificate(cert_file_path)
@@ -51,26 +54,31 @@ class DocumentSigner:
         Подпись одного файла
         """
         start_time = time.time()
-        
-        try:
-        # with self.local_lock:
-            _, output_file = sign_file_cades_x_long(
-                iface=self.signManager.iface,
-                key_file_path=task.key_file_path,
-                key_password=task.key_password, 
-                target_file_path=task.file_path
-            )
-            
-            processing_time = time.time() - start_time
-            task.complet_task.put(1)
-            return SignResult(
-                file_path=task.file_path,
-                output_path=output_file,
-                success=True,
-                processing_time=processing_time
-            )
-            
-        except Exception as e:
+        while task.atempts <= self.atempts:
+            try:
+                task.atempts += 1
+                _, output_file = sign_file_cades_x_long(
+                    iface=self.signManager.iface,
+                    key_file_path=task.key_file_path,
+                    key_password=task.key_password, 
+                    target_file_path=task.file_path
+                )
+                
+                processing_time = time.time() - start_time
+                task.complet_task.put(1)
+                return SignResult(
+                    file_path=task.file_path,
+                    output_path=output_file,
+                    success=True,
+                    processing_time=processing_time
+                )
+                
+            except Exception as e:
+                
+                # task.complet_task.put(1)
+                logging.error(f"Error sign CAdES-X Long: atempt - {task.atempts}: error {e}")
+                time.sleep(10 * task.atempts)
+        else:
             processing_time = time.time() - start_time
             task.complet_task.put(1)
             logging.error(f"Error sign CAdES-X Long: {e}")
@@ -90,10 +98,14 @@ class BatchSigner:
     def __init__(
         self, 
         cert_file_path: Union[str, Path] = None,
-        max_workers: int = 10
+        max_workers: int = 10,
+        atempts: int = 10
     ):
         self.max_workers = max_workers
-        self.signer = DocumentSigner(cert_file_path)
+        self.signer = DocumentSigner(
+            atempts,
+            cert_file_path
+        )
         
     def find_documents_to_sign(
         self, 
@@ -106,22 +118,35 @@ class BatchSigner:
         if extensions is None:
             extensions = ['.pdf']
         
-        documents = []
+        unsigned_files = []
+        folder_stats: dict[Path, int] = {}
+        
         root_path = Path(root_folder)
         
-        directories = [item for item in root_path.iterdir() if item.is_dir()]
-        for dir in directories:
-            unsigned_files = []
-            for file in dir.iterdir():
-                if file.is_file() and file.suffix.lower() in extensions:
-                    signature_file = file.with_suffix(file.suffix + '.p7s')
+        def scan_dir(path: Path):
+            local_unsigned = 0
+            # Перебор всех элементов в текущей папке
+            for item in path.iterdir():
+                if item.is_dir():
+                    # Рекурсивно обходим подпапку
+                    scan_dir(item)
+                elif item.is_file() and item.suffix.lower() in extensions:
+                    # Проверяем наличие файла подписи
+                    signature_file = item.with_suffix(item.suffix + '.p7s')
                     if not signature_file.exists():
-                        unsigned_files.append(file)
-            
-            print(f"In dir {dir} files with sign {len(unsigned_files)}")
-            documents.extend(str(f) for f in unsigned_files)
+                        unsigned_files.append(str(item))
+                        local_unsigned += 1
+                        
+            if local_unsigned > 0:
+                folder_stats[path] = local_unsigned
+
+        scan_dir(root_path)
         
-        return documents
+        for path, num in folder_stats.items():
+            logging.info(f"Folder {path.name} have {num} files without sign.")
+        
+        return unsigned_files
+            
     
     
     def sign_documents_batch(
@@ -137,6 +162,7 @@ class BatchSigner:
         Пакетная подпись документов с многопоточностью
         """
         progress_queue = queue.Queue()
+        tasks = []
         
         documents = self.find_documents_to_sign(root_folder, extensions)
         if not documents:
@@ -146,7 +172,6 @@ class BatchSigner:
         docsCounter = DocsSignCounter(len(documents))
         logging.info(f"Found {docsCounter.total_docs} documents to sign")
         
-        tasks = []
         for doc_path in documents:
             if output_base_dir:
                 rel_path = os.path.relpath(doc_path, root_folder)
@@ -159,7 +184,8 @@ class BatchSigner:
                 key_file_path=key_file_path,
                 key_password=key_password,
                 complet_task=progress_queue,
-                output_dir=output_dir
+                output_dir=output_dir,
+                atempts=0
             )
             tasks.append(task)
         

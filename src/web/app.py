@@ -143,7 +143,7 @@ class StreamlitApp:
     def download_secrets(self):
         cert_file = st.file_uploader(
             "Файл сертифіката", 
-            type=["crt"], 
+            type=["crt", "cer"], 
         )
         key_file = st.file_uploader(
             "Файл ключа", 

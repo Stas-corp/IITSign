@@ -12,6 +12,7 @@ class SignTask(BaseModel):
     key_password: str
     complet_task: Queue
     output_dir: Optional[str] = None
+    atempts: int = 0
 
 
 class SignResult(BaseModel):

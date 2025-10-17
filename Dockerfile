@@ -1,26 +1,30 @@
-# Используйте совместимый базовый образ Windows с нужной версией Python
-FROM mcr.microsoft.com/windows/python:3.12
+FROM python:3.12-slim
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    libc6 \
+    libgcc-s1 \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Создание рабочей директории
-WORKDIR C:\\app
+WORKDIR /app
 
-# Копирование requirements-файла
-COPY requieremnts.txt requieremnts.txt
-
-# Установка зависимостей Python
+COPY requieremnts.txt ./requieremnts.txt
 RUN pip install --no-cache-dir -r requieremnts.txt
 
-# Создание директорий для данных и ключей (используйте PowerShell)
-RUN powershell -Command "New-Item -ItemType Directory -Force -Path C:\\app\\data, C:\\app\\src\\sign\\keys, C:\\app\\eusigncp_store\\Certificates"
+# Создание директорий для данных и ключей
+RUN mkdir -p /app/data /app/src/sign/keys 
 
-# Копирование всех файлов проекта
+# Копирование файлов проекта
 COPY . .
 
 # Настройка переменных окружения
-ENV DLL_DIR="C:\\app\\Modules"
-ENV PYTHONPATH="C:\\app"
+ENV LD_LIBRARY_PATH=/app/ModulesUNIX:$LD_LIBRARY_PATH
+ENV DLL_DIR=/app/ModulesUNIX
+ENV PYTHONPATH=/app
 
-# Открытие порта (добавьте в docker-compose.yml)
+# Открытие порта
 EXPOSE 63370
 
 # Команда запуска

@@ -13,12 +13,7 @@ def main(
     workers: int = 10,
     cert_file: Union[str, Path] = None,
     callback_progress: Callable = None
-):
-    logging.basicConfig(
-        level=logging.INFO, 
-        format='%(asctime)s %(levelname)s [%(module)s:%(funcName)s] %(message)s'
-    )        
-    
+):   
     batch_signer = BatchSigner(
         cert_file_path=cert_file,
         max_workers=workers
