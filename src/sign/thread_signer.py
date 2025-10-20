@@ -62,7 +62,7 @@ class DocumentSigner:
                     key_file_path=task.key_file_path,
                     key_password=task.key_password, 
                     target_file_path=task.file_path,
-                    sign_Long_type=task.sign_Long_type
+                    is_sign_Long_type=task.sign_Long_type
                 )
                 
                 processing_time = time.time() - start_time
