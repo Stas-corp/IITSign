@@ -66,10 +66,12 @@ class DocumentSigner:
                 _, output_file = sign_file_cades_x_long(
                     iface=self.signManager.iface,
                     key_bytes=self.key_bytes,
-                    key_password=task.key_password, 
+                    key_password=task.key_password,
+                    is_sign_Long_type=task.is_sign_Long_type,
                     target_file_path=task.file_path
                 )
-                
+                # if not output_file:
+                #     raise ValueError('No sign file')
                 processing_time = time.time() - start_time
                 task.complet_task.put(1)
                 return SignResult(
@@ -82,7 +84,7 @@ class DocumentSigner:
             except Exception as e:
                 
                 # task.complet_task.put(1)
-                logging.error(f"Error sign CAdES-X Long: atempt - {task.atempts}: error {e}")
+                logging.error(f"Error sign CAdES-X Long: atempt - {task.atempts}: error {e.args[0]['ErrorCode']} {e.args[0]['ErrorDesc'].decode()}")
                 time.sleep(10 * task.atempts)
         else:
             processing_time = time.time() - start_time
@@ -165,6 +167,7 @@ class BatchSigner:
         root_folder: str,
         key_password: str, 
         extensions: List[str],
+        is_sign_Long_type: Optional[bool] = True,
         output_base_dir: Optional[str] = None,
         callback_progress: Callable = None
     ) -> List[SignResult]:
@@ -194,6 +197,7 @@ class BatchSigner:
                 key_file_path=self.signer.key_bytes,
                 key_password=key_password,
                 complet_task=progress_queue,
+                is_sign_Long_type=is_sign_Long_type,
                 output_dir=output_dir,
                 atempts=0
             )
