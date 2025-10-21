@@ -14,10 +14,9 @@ from src.sign.signManager import EUSignCPManager
 
 def sign_file_cades_x_long(
     iface: EUSignCPManager,
-    key_file_path: str,
+    key_bytes: str,
     key_password: str,
     target_file_path: str,
-    is_sign_Long_type: bool,
     output_dir: Optional[str] = None,
     
 ) -> Tuple[bytes, str]:
@@ -25,34 +24,8 @@ def sign_file_cades_x_long(
     Підпис через глобальні налаштування типу підпису
     """
     try:
-        iface.Initialize()
-        
-        # Встановлюємо тип підпису глобально
-        if is_sign_Long_type:
-            sign_type = EU_SIGN_TYPE_CADES_X_LONG
-        else:
-            sign_type = EU_SIGN_TYPE_CADES_BES
-            
-        iface.SetRuntimeParameter(
-            "SignType",  # параметр типу підпису
-            sign_type  # 16 - CAdES-X Long
-        )
-        
-        # Включаємо тимчасові мітки TSP (обов'язково для X Long)
-        iface.SetRuntimeParameter(
-            "SignIncludeContentTimeStamp",
-            True
-        )
-        
-        # Включаємо сертифікати ЦСК
-        iface.SetRuntimeParameter(
-            "SignIncludeCACertificates",
-            True
-        )
-        
-        # Читаємо ключ
-        with open(key_file_path, "rb") as f:
-            key_bytes = f.read()
+        with open(target_file_path, "rb") as f:
+            file_data = f.read()
         
         owner_info = {}
         iface.ReadPrivateKeyBinary(
@@ -60,21 +33,19 @@ def sign_file_cades_x_long(
             key_password.encode('utf-8'),
             owner_info
         )
-        
-        # Читаємо файл
-        with open(target_file_path, "rb") as f:
-            file_data = f.read()
-        
         # Простий підпис - тип береться з глобальних налаштувань
         signed_data_bytes = []
+        try:
+            iface.SignData(
+                file_data, len(file_data),
+                None,  # не нужен BASE64
+                signed_data_bytes
+            )
+        except Exception as e:
+            logging.error(f"Error create sign data: {e}")
+            raise RuntimeError
         
-        iface.SignData(
-            file_data, len(file_data),
-            None,  # не потрібен BASE64
-            signed_data_bytes
-        )
-        
-        logging.info(len(signed_data_bytes))
+        # logging.info(len(signed_data_bytes))
         
         output_filename = target_file_path + ".p7s"
         if output_dir:
@@ -85,6 +56,9 @@ def sign_file_cades_x_long(
             f.write(signed_data_bytes[0])
         
         return signed_data_bytes[0], output_filename
+    
+    except Exception as e:
+        logging.error(f"Error sign algorithm: {e.args[0]['ErrorCode']} {e.args[0]['ErrorDesc'].decode()}")
         
     finally:
         iface.ResetPrivateKey()
