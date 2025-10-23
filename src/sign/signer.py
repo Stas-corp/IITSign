@@ -45,8 +45,6 @@ def main(
         Total time: {time.time() - start_time:.2f}s
         """
         
-        
-        
     except Exception as e:
         message = f"Batch signing failed: {e}"
         

@@ -23,7 +23,7 @@ st.set_page_config(
 
 KEYS_FILES = dict(json.loads(os.getenv("ALL_KEYS")))
 # KEY = os.getenv("KEY")
-KEYS_FOLDER = Path(r'src\sign\keys')
+KEYS_FOLDER = Path('src') / 'sign' / 'keys'
 KEYS_FILES = {
     key: {
         "key": Path(key), 

@@ -14,7 +14,7 @@ COPY requieremnts.txt ./requieremnts.txt
 RUN pip install --no-cache-dir -r requieremnts.txt
 
 # Создание директорий для данных и ключей
-RUN mkdir -p /app/data /app/src/sign/keys 
+RUN mkdir -p /app/data /app/src/sign/keys
 
 # Копирование файлов проекта
 COPY . .

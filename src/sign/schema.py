@@ -14,7 +14,6 @@ class SignTask(BaseModel):
     is_sign_Long_type: Optional[bool]
     output_dir: Optional[str] = None
     atempts: int = 0
-    
 
 
 class SignResult(BaseModel):
