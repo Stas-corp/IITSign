@@ -45,7 +45,7 @@ class EUSignCPManager:
         self,
         key_file_path: str,
         cert_path: str,
-        is_sign_Long_type: bool
+        is_sign_Long_type: bool = True
     ):
         if not self._initialized:
             with self._lock:
@@ -121,34 +121,24 @@ class EUSignCPManager:
     
     def load_and_check_certificate(self) -> bool:
         try:
-            # 1. Прочитать файл сертификата
             logging.info(self.cert_path)
             with open(self.cert_path, "rb") as f:
                 cert_bytes = f.read()
+
             cert_len = len(cert_bytes)
-
-            # 2. Сохранить сертификат в хранилище
             self.iface.SaveCertificate(cert_bytes, cert_len)
-
-            # 3. Обновить хранилище (перезагрузить список сертификатов)
             self.iface.RefreshFileStore(True)
-
-            # 4. Проверить загруженный сертификат
-            #    Если сертификат не найден или некорректен, выбросится исключение
+            
             try:
                 self.iface.CheckCertificate(cert_bytes, cert_len)
                 # self.iface.CheckCertificateByOCSP(cert_bytes, cert_len)
+                logging.info("Certificate successfully download and check!")
+                return True
             except Exception as e:
                 logging.error(f"Error check certificate: {e.args[0]["ErrorDesc"].decode()}")
                 raise RuntimeError("Error check certificate")
-		
-
-            logging.info("Certificate successfully download and check!")
-            return True
-
+        
         except Exception as e:
-            
-            # e = e.args[0]
             logging.error(f"Error load certificate: {e}")
             return False
         
