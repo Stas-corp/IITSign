@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.sign.schema import SignTask, SignResult
 from src.sign.signManager import EUSignCPManager
 from src.sign.cadesLong_sign import sign_file_cades_x_long
+from src.db.dbManager import DatabaseManager
 
 class DocsSignCounter:
     def __init__(
@@ -40,14 +41,22 @@ class DocumentSigner:
     def __init__(
         self, 
         atempts: int,
-        cert_file_path: Union[str, Path] = None,
+        key_file_path: str,
+        is_sign_Long_type: bool,
+        dbManager: DatabaseManager,
+        cert_file_path: Union[str, Path] = None
         
     ):
         self.atempts = atempts
-        self.signManager = EUSignCPManager()
+        self.dbManager = dbManager
+        self.signManager = EUSignCPManager(
+            key_file_path=key_file_path,
+            cert_path=cert_file_path,
+            is_sign_Long_type=is_sign_Long_type
+        )
         if cert_file_path:
-            self.signManager.load_and_check_certificate(cert_file_path)
-        
+            self.signManager.load_and_check_certificate()
+        self.key_bytes = self.signManager.load_key()
         
     def sign_single_file(self, task: SignTask) -> SignResult:
         """
@@ -59,14 +68,22 @@ class DocumentSigner:
                 task.atempts += 1
                 _, output_file = sign_file_cades_x_long(
                     iface=self.signManager.iface,
-                    key_file_path=task.key_file_path,
-                    key_password=task.key_password, 
-                    target_file_path=task.file_path,
-                    is_sign_Long_type=task.sign_Long_type
+                    key_bytes=self.key_bytes,
+                    key_password=task.key_password,
+                    is_sign_Long_type=task.is_sign_Long_type,
+                    target_file_path=task.file_path
                 )
-                
+                # if not output_file:
+                #     raise ValueError('No sign file')
                 processing_time = time.time() - start_time
                 task.complet_task.put(1)
+                
+                filename = Path(task.file_path).name
+                parent_folder = Path(task.file_path).parent.name
+                formatted_path = f"{parent_folder}/{filename}"
+                
+                self.dbManager.mark_file_as_signed(formatted_path)
+                
                 return SignResult(
                     file_path=task.file_path,
                     output_path=output_file,
@@ -98,15 +115,22 @@ class BatchSigner:
     """
     def __init__(
         self, 
+        sign_Long_type: bool,
+        key_file_path: Union[str, Path],
         cert_file_path: Union[str, Path] = None,
         max_workers: int = 10,
         atempts: int = 10
     ):
         self.max_workers = max_workers
+        self.dbManager = DatabaseManager()
         self.signer = DocumentSigner(
-            atempts,
-            cert_file_path
+            atempts=atempts,
+            is_sign_Long_type=sign_Long_type,
+            key_file_path=key_file_path,
+            cert_file_path=cert_file_path,
+            dbManager = self.dbManager
         )
+        
         
     def find_documents_to_sign(
         self, 
@@ -153,10 +177,9 @@ class BatchSigner:
     def sign_documents_batch(
         self, 
         root_folder: str,
-        sign_Long_type: bool,
-        key_file_path: Union[str, Path],
         key_password: str, 
         extensions: List[str],
+        is_sign_Long_type: Optional[bool] = True,
         output_base_dir: Optional[str] = None,
         callback_progress: Callable = None
     ) -> List[SignResult]:
@@ -170,6 +193,7 @@ class BatchSigner:
         if not documents:
             logging.warning(f"No documents found in {root_folder}")
             return []
+        self.dbManager.add_files_for_signing(documents)
         
         docsCounter = DocsSignCounter(len(documents))
         logging.info(f"Found {docsCounter.total_docs} documents to sign")
@@ -183,10 +207,10 @@ class BatchSigner:
                 output_dir = None
             task = SignTask(
                 file_path=doc_path,
-                key_file_path=key_file_path,
+                key_file_path=self.signer.key_bytes,
                 key_password=key_password,
                 complet_task=progress_queue,
-                sign_Long_type=sign_Long_type,
+                is_sign_Long_type=is_sign_Long_type,
                 output_dir=output_dir,
                 atempts=0
             )

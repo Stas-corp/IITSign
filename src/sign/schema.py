@@ -8,13 +8,12 @@ class SignTask(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
     
     file_path: Union[str, Path]
-    key_file_path: Union[str, Path, BytesIO]
+    key_file_path: Union[str, Path, BytesIO, bytes]
     key_password: str
     complet_task: Queue
-    sign_Long_type: bool
+    is_sign_Long_type: Optional[bool]
     output_dir: Optional[str] = None
     atempts: int = 0
-    
 
 
 class SignResult(BaseModel):

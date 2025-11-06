@@ -227,3 +227,4 @@ src/sign/keys/alla.jks
 request.json
 response.json
 debug_verify_digest.py
+signature_files.db

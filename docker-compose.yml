@@ -8,6 +8,34 @@ services:
       - "63370:63370"                # Проброс порта Streamlit
     env_file:
       - .env                       # Переменные окружения
+    environment:
+      DB_SERVER: "mssql"
     volumes:
-      - "C:\\Users\\ssamo\\Documents:C:\\app\\data"  # <-- bind mount: путь на хосте → путь в контейнере
+      - "C:/Users/ssamo/Documents:/app/data"  # <-- bind mount: путь на хосте → путь в контейнере
     restart: unless-stopped
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql-server
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Password123
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 6g
+    # healthcheck:
+    #   test: ["CMD-SHELL", "/opt/mssql-tools/bin/sqlcmd -U sa -P $MSSQL_SA_PASSWORD -Q 'SELECT 1'"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 5
+    restart: unless-stopped
+
+volumes:
+  mssql-data:

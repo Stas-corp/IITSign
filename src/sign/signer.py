@@ -15,19 +15,19 @@ def main(
     callback_progress: Callable = None
 ):   
     batch_signer = BatchSigner(
+        sign_Long_type=is_Long_sign,
+        key_file_path=key_file,
         cert_file_path=cert_file,
         max_workers=workers,
-        atempts=1
+        atempts=3
     )
     start_time = time.time()
     try:
         # Выполнение пакетной подписи
         results = batch_signer.sign_documents_batch(
             root_folder=root_folder,
-            sign_Long_type=is_Long_sign,
-            key_file_path=key_file,
             key_password=key_password,
-            extensions=['.pdf'],
+            extensions=['.pdf', '.doc'],
             callback_progress=callback_progress
         )
         
@@ -44,8 +44,6 @@ def main(
         
         Total time: {time.time() - start_time:.2f}s
         """
-        
-        
         
     except Exception as e:
         message = f"Batch signing failed: {e}"
