@@ -7,15 +7,28 @@ from src.db.schema import SignatureFile, Base
 from src.db.config import connection_string
 
 class DatabaseManager:
-    def __init__(self, database_url=connection_string):
+    def __init__(
+        self, 
+        db_name: str = None,
+        is_local_conection: bool = False,
+        is_conteiner: bool = False
+    ):
         """
         Инициализация менеджера базы данных
         
         Args:
-            database_url: URL подключения к базе данных
+            db_name: имя таблицы
+            is_local_conection: показатель на подключение к локальной базе,
+                                тянет данные из .env
         """
+        self.database_url = connection_string(
+            db_name=db_name,
+            is_local=is_local_conection,
+            is_conteiner=is_conteiner
+        )
+        print("*"*50, "\n", self.database_url, "\n", "*"*50)
         self.engine = create_engine(
-            database_url,
+            self.database_url,
             pool_size=20,
             max_overflow=10,
             pool_pre_ping=True

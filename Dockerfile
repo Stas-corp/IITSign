@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     unixodbc-dev \
     unixodbc \
+    locales \
+    && sed -i -e 's/# uk_UA.UTF-8 UTF-8/uk_UA.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen \
     && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
     && curl https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list \
     && apt-get update \
@@ -29,6 +32,9 @@ RUN mkdir -p /app/data /app/src/sign/keys
 COPY . .
 
 # Настройка переменных окружения
+ENV LANG=uk_UA.UTF-8
+ENV LC_ALL=uk_UA.UTF-8
+ENV LANGUAGE=uk_UA:uk
 ENV LD_LIBRARY_PATH=/app/ModulesUNIX:$LD_LIBRARY_PATH
 ENV DLL_DIR=/app/ModulesUNIX
 ENV PYTHONPATH=/app

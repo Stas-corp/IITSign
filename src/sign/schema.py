@@ -11,7 +11,7 @@ class SignTask(BaseModel):
     key_file_path: Union[str, Path, BytesIO, bytes]
     key_password: str
     complet_task: Queue
-    is_sign_Long_type: Optional[bool]
+    is_sign_Long_type: Optional[bool] = True
     output_dir: Optional[str] = None
     atempts: int = 0
 

@@ -13,7 +13,7 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 class SignatureFile(Base):
-    __tablename__ = "Files"
+    __tablename__ = "files"
     __table_args__ = {"extend_existing": True}
     
     Id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)

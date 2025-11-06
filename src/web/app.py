@@ -97,14 +97,14 @@ class StreamlitApp:
             
             st.checkbox(
                 "Використовувати CAdES-X Long підпис",
-                value=False,
+                value=True,
                 key="is_long_sign"
             )
             
             st.slider(
                 "Обери кількість потоків:",
                 min_value=1,
-                max_value=48,
+                max_value=17,
                 value=10,
                 step=1,
                 key='workers_num'
