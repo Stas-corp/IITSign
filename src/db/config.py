@@ -1,5 +1,6 @@
 import os
 import dotenv
+import logging
 
 dotenv.load_dotenv()
 
@@ -16,6 +17,8 @@ def connection_string(
     SERVER = os.getenv(f"{prefix}DB_SERVER") if not is_conteiner else "mssql"
     DATABASE = os.getenv(f"{prefix}DB_NAME") if not db_name else db_name
     PASSWORD = os.getenv(f"{prefix}DB_PASSWORD")
+    
+    logging.info(f"Data Base server: {SERVER}")
     
     return (
         f"mssql+pyodbc://{USER}:{PASSWORD}@{SERVER}:1433/{DATABASE}"

@@ -1,6 +1,7 @@
+import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from src.db.schema import SignatureFile, Base
@@ -36,6 +37,24 @@ class DatabaseManager:
         Base.metadata.create_all(self.engine)
         Session = sessionmaker(bind=self.engine, autoflush=False)
         self.session = scoped_session(Session)
+        self._check_connection()
+    
+    
+    def _check_connection(self) -> tuple[bool, str]:
+        """
+        Проверяет соединение с базой данных и возвращает статус
+        
+        Returns:
+            bool
+        """
+        try:
+            with self.engine.connect() as conn:
+                db_name = conn.execute(text("SELECT DB_NAME()")).scalar()
+            logging.info(f"Connection to the database {db_name} successfully!")
+            return True
+        except Exception as e:
+            logging.critical(f"Error connection to the database : {str(e)}")
+            return False
     
     
     def add_files_for_signing(self, file_paths, is_checking: bool = True):

@@ -2,12 +2,11 @@ import os
 import time
 import queue
 import logging
-import threading
 from pathlib import Path
 from typing import List, Optional, Callable, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.sign.schema import SignTask, SignResult
+from src.sign.model import SignTask, SignResult
 from src.sign.signManager import EUSignCPManager
 from src.sign.cadesLong_sign import sign_file_cades_x_long
 from src.db.dbManager import DatabaseManager
@@ -155,10 +154,8 @@ class BatchSigner:
         
         def scan_dir(path: Path):
             local_unsigned = 0
-            # Перебор всех элементов в текущей папке
             for item in path.iterdir():
                 if item.is_dir():
-                    # Рекурсивно обходим подпапку
                     scan_dir(item)
                 elif item.is_file() and item.suffix.lower() in extensions:
                     # Проверяем наличие файла подписи
@@ -183,12 +180,12 @@ class BatchSigner:
         root_folder: str,
         key_password: str, 
         extensions: List[str],
-        is_sign_Long_type: Optional[bool] = True,
+        # is_sign_Long_type: Optional[bool] = True,
         output_base_dir: Optional[str] = None,
         callback_progress: Callable = None
     ) -> List[SignResult]:
         """
-        Пакетная подпись документов с многопоточностью
+        Пакетная подпись документов
         """
         progress_queue = queue.Queue()
         tasks = []
@@ -197,7 +194,7 @@ class BatchSigner:
         if not documents:
             logging.warning(f"No documents found in {root_folder}")
             return []
-        # self.dbManager.add_files_for_signing(documents, False)
+        self.dbManager.add_files_for_signing(documents, False)
         
         docsCounter = DocsSignCounter(len(documents))
         logging.info(f"Found {docsCounter.total_docs} documents to sign")

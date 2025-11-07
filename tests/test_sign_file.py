@@ -2,7 +2,7 @@ import logging
 from queue import Queue
 from pathlib import Path
 
-from src.sign.schema import SignTask
+from src.sign.model import SignTask
 from src.db.dbManager import DatabaseManager
 from src.sign.thread_signer import DocumentSigner
 
@@ -16,11 +16,11 @@ logging.basicConfig(
     )     
 
 def test_sign():
-    # dbManager = DatabaseManager(
-    #         # db_name="test_DB",
-    #         is_local_conection=True,
-            
-    #     )
+    dbManager = DatabaseManager(
+            # db_name="test_DB",
+            is_local_conection=True,
+            is_conteiner=True
+        )
     
     signer = DocumentSigner(
         1,
