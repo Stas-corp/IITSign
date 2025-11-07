@@ -1,21 +1,35 @@
+import logging
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 
 from src.db.schema import SignatureFile, Base
 from src.db.config import connection_string
 
 class DatabaseManager:
-    def __init__(self, database_url=connection_string):
+    def __init__(
+        self, 
+        db_name: str = None,
+        is_local_conection: bool = False,
+        is_conteiner: bool = False
+    ):
         """
         Инициализация менеджера базы данных
         
         Args:
-            database_url: URL подключения к базе данных
+            db_name: имя таблицы
+            is_local_conection: показатель на подключение к локальной базе,
+                                тянет данные из .env
         """
+        self.database_url = connection_string(
+            db_name=db_name,
+            is_local=is_local_conection,
+            is_conteiner=is_conteiner
+        )
+        print("*"*50, "\n", self.database_url, "\n", "*"*50)
         self.engine = create_engine(
-            database_url,
+            self.database_url,
             pool_size=20,
             max_overflow=10,
             pool_pre_ping=True
@@ -23,6 +37,24 @@ class DatabaseManager:
         Base.metadata.create_all(self.engine)
         Session = sessionmaker(bind=self.engine, autoflush=False)
         self.session = scoped_session(Session)
+        self._check_connection()
+    
+    
+    def _check_connection(self) -> tuple[bool, str]:
+        """
+        Проверяет соединение с базой данных и возвращает статус
+        
+        Returns:
+            bool
+        """
+        try:
+            with self.engine.connect() as conn:
+                db_name = conn.execute(text("SELECT DB_NAME()")).scalar()
+            logging.info(f"Connection to the database {db_name} successfully!")
+            return True
+        except Exception as e:
+            logging.critical(f"Error connection to the database : {str(e)}")
+            return False
     
     
     def add_files_for_signing(self, file_paths, is_checking: bool = True):

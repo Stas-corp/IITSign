@@ -7,13 +7,13 @@ from sqlalchemy import (
     NCHAR,
     func
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import DeclarativeBase
 
-
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 class SignatureFile(Base):
-    __tablename__ = "Files"
+    __tablename__ = "files"
     __table_args__ = {"extend_existing": True}
     
     Id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
