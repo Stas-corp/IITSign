@@ -194,7 +194,8 @@ class BatchSigner:
         if not documents:
             logging.warning(f"No documents found in {root_folder}")
             return []
-        self.dbManager.add_files_for_signing(documents, False)
+        
+        # self.dbManager.add_files_for_signing(documents, False)
         
         docsCounter = DocsSignCounter(len(documents))
         logging.info(f"Found {docsCounter.total_docs} documents to sign")
