@@ -239,10 +239,10 @@ class StreamlitApp:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            def update_progress(total, done):
-                progress = int(done / total * 100)
+            def update_progress(completed, total):
+                progress = int(completed / total * 100)
                 progress_bar.progress(progress)
-                status_text.text(f"Опрацьовано {done} з {total} документів")
+                status_text.text(f"Опрацьовано {completed} з {total} документів")
             
             print(st.session_state.key_file,
             st.session_state.cert_file)
@@ -251,7 +251,7 @@ class StreamlitApp:
                 result = signer(
                     root_folder=st.session_state.root_folder,
                     key_file=st.session_state.key_file,
-                    is_Long_sign=st.session_state.is_long_sign,
+                    is_long_sign=st.session_state.is_long_sign,
                     cert_file=st.session_state.cert_file,
                     key_password=st.session_state.key_password,
                     workers=st.session_state.workers_num,

@@ -2,87 +2,112 @@ import os
 import time
 import queue
 import logging
+import threading
 from pathlib import Path
-from typing import List, Optional, Callable, Union
+from typing import Optional, Callable, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from src.sign.model import SignTask, SignResult
+from src.sign.model import SignTask, SignResult, SignerConfig
 from src.sign.signManager import EUSignCPManager
 from src.sign.cadesLong_sign import sign_file_cades_x_long
 from src.db.dbManager import DatabaseManager
 
-class DocsSignCounter:
-    def __init__(
-        self, 
-        total_docs: int
-    ):
-        self.total_docs = total_docs
-        self.signed_docs = 0
+class ProgressCounter:
+    """Простой счётчик для отслеживания прогресса"""
     
+    def __init__(self, total: int):
+        self.total = total
+        self.completed = 0
     
-    def increment(self, num=1):
-        self.signed_docs += num
-        return self.signed_docs
+    def increment(self, count: int = 1):
+        """Увеличить счётчик"""
+        self.completed += count
+        return self.completed
     
+    def get_value(self) -> tuple[int, int]:
+        """Получить (completed, total)"""
+        return self.completed, self.total
     
-    def get_value(self):
-        return (self.total_docs, self.signed_docs)
-    
-    
-    def check_docks_completed(self):
-        return self.signed_docs < self.total_docs
+    def is_incomplete(self) -> bool:
+        """Проверить, что ещё есть незавершённые задачи"""
+        return self.completed < self.total
 
 
-class DocumentSigner:
-    """
-    Класс для подписи документов с thread-safe операциями
-    """
-    def __init__(
-        self, 
-        atempts: int,
-        key_file_path: str,
-        is_sign_Long_type: bool,
-        # dbManager: DatabaseManager,
-        cert_file_path: Union[str, Path] = None
+class FileScanner:
+    """Поиск неподписанных файлов"""
+    
+    def __init__(self, extensions: list[str]):
+        self.extensions = [ext.lower() for ext in extensions]
+    
+    def find_unsigned_files(self, root_folder: Path) -> list[Path]:
+        """Найти все неподписанные файлы в директории"""
+        unsigned_files = []
+        folder_stats: dict[Path, int] = {}
+        folder_counter = 0
         
-    ):
-        self.atempts = atempts
-        # self.dbManager = dbManager
-        self.signManager = EUSignCPManager(
-            key_file_path=key_file_path,
-            cert_path=cert_file_path,
-            is_sign_Long_type=is_sign_Long_type
-        )
-        if cert_file_path:
-            self.signManager.load_and_check_certificate()
-        self.key_bytes = self.signManager.load_key()
-    
-    
-    def sign_single_file(self, task: SignTask) -> SignResult:
-        """
-        Подпись одного файла
-        """
-        start_time = time.time()
-        while task.atempts <= self.atempts:
+        def scan_directory(path: Path) -> int:
+            nonlocal folder_counter
+            local_unsigned = 0
+            
             try:
-                task.atempts += 1
-                _, output_file = sign_file_cades_x_long(
-                    iface=self.signManager.iface,
-                    key_bytes=self.key_bytes,
-                    key_password=task.key_password,
-                    # is_sign_Long_type=task.is_sign_Long_type,
-                    target_file_path=task.file_path
-                )
-                # if not output_file:
-                #     raise ValueError('No sign file')
+                for item in path.iterdir():
+                    if item.is_dir():
+                        folder_counter += 1
+                        logging.info(f"[Folder #{folder_counter}] {item.name}")
+                        local_unsigned += scan_directory(item)
+                    elif item.is_file() and item.suffix.lower() in self.extensions:
+                        signature_file = item.with_suffix(item.suffix + '.p7s')
+                        if not signature_file.exists():
+                            unsigned_files.append(item)
+                            local_unsigned += 1
+            except PermissionError:
+                logging.warning(f"No access to folder: {path}")
+            
+            if local_unsigned > 0:
+                folder_stats[path] = local_unsigned
+            
+            return local_unsigned
+        
+        scan_directory(root_folder)
+        
+        for path, count in folder_stats.items():
+            logging.info(f"Folder {path.name} has {count} unsigned files")
+        
+        return unsigned_files
+
+
+class SignatureService:
+    """Сервис для подписания файлов с механизмом повторных попыток"""
+    
+    def __init__(self, config: SignerConfig):
+        self.config = config
+        self._init_sign_manager()
+    
+    def _init_sign_manager(self):
+        """Инициализация менеджера подписи"""
+        self.sign_manager = EUSignCPManager(
+            key_file_path=str(self.config.key_file_path),
+            cert_path=str(self.config.cert_file_path) if self.config.cert_file_path else None,
+            is_sign_Long_type=self.config.is_sign_long_type
+        )
+        
+        if self.config.cert_file_path:
+            self.sign_manager.load_and_check_certificate()
+        
+        self.key_bytes = self.sign_manager.load_key()
+    
+    def sign_file(self, task: SignTask) -> SignResult:
+        """Подписать файл с повторными попытками при ошибках"""
+        start_time = time.time()
+        last_error = None
+        
+        for attempt in range(1, self.config.max_attempts + 1):
+            try:
+                output_file = self._perform_signing(task)
                 processing_time = time.time() - start_time
-                task.complet_task.put(1)
                 
-                filename = Path(task.file_path).name
-                parent_folder = Path(task.file_path).parent.name
-                formatted_path = f"{parent_folder}/{filename}"
-                
-                # self.dbManager.mark_file_as_signed(formatted_path)
+                if task.on_complete:
+                    task.on_complete()
                 
                 return SignResult(
                     file_path=task.file_path,
@@ -90,168 +115,228 @@ class DocumentSigner:
                     success=True,
                     processing_time=processing_time
                 )
-                
+            
             except Exception as e:
+                last_error = e
+                logging.error(
+                    f"Error signing CAdES-X Long (attempt {attempt}/{self.config.max_attempts}): {e}"
+                )
                 
-                # task.complet_task.put(1)
-                logging.error(f"Error sign CAdES-X Long: atempt - {task.atempts}: error {e}")
-                time.sleep(10 * task.atempts)
-        else:
-            processing_time = time.time() - start_time
-            task.complet_task.put(1)
-            logging.error(f"Error sign CAdES-X Long: {e}")
-            return SignResult(
-                file_path=task.file_path,
-                output_path="",
-                success=False,
-                error_message=str(e),
-                processing_time=processing_time
-            )
-
-
-class BatchSigner:
-    """
-    Класс для пакетной подписи документов
-    """
-    def __init__(
-        self, 
-        sign_Long_type: bool,
-        key_file_path: Union[str, Path],
-        cert_file_path: Union[str, Path] = None,
-        max_workers: int = 10,
-        atempts: int = 10
-    ):
-        self.max_workers = max_workers
-        # self.dbManager = DatabaseManager(
-        #     db_name="test_DB",
-        #     is_local_conection=True,
-        #     is_conteiner=True
-        # )
-        self.signer = DocumentSigner(
-            atempts=atempts,
-            is_sign_Long_type=sign_Long_type,
-            key_file_path=key_file_path,
-            cert_file_path=cert_file_path,
-            # dbManager = self.dbManager
+                if attempt < self.config.max_attempts:
+                    sleep_time = self.config.retry_delay * attempt
+                    time.sleep(sleep_time)
+        
+        processing_time = time.time() - start_time
+        
+        if task.on_complete:
+            task.on_complete()
+        
+        return SignResult(
+            file_path=task.file_path,
+            output_path="",
+            success=False,
+            error_message=str(last_error),
+            processing_time=processing_time
         )
     
+    def _perform_signing(self, task: SignTask) -> str:
+        """Выполнить операцию подписания"""
+        _, output_file = sign_file_cades_x_long(
+            iface=self.sign_manager.iface,
+            key_bytes=self.key_bytes,
+            key_password=task.key_password,
+            target_file_path=task.file_path
+        )
+        return output_file
+
+
+class BatchOrchestrator:
+    """Оркестратор для пакетной подписи документов"""
     
-    def find_documents_to_sign(
-        self, 
-        root_folder: str, 
-        extensions: List[str] = None
-    ) -> List[str]:
-        """
-        Поиск документов для подписи в папках
-        """
-        if extensions is None:
-            extensions = ['.pdf']
-        
-        unsigned_files = []
-        folder_stats: dict[Path, int] = {}
-        
-        root_path = Path(root_folder)
-        
-        def scan_dir(path: Path):
-            local_unsigned = 0
-            for item in path.iterdir():
-                if item.is_dir():
-                    scan_dir(item)
-                elif item.is_file() and item.suffix.lower() in extensions:
-                    # Проверяем наличие файла подписи
-                    signature_file = item.with_suffix(item.suffix + '.p7s')
-                    if not signature_file.exists():
-                        unsigned_files.append(str(item))
-                        local_unsigned += 1
-                        
-            if local_unsigned > 0:
-                folder_stats[path] = local_unsigned
-        
-        scan_dir(root_path)
-        
-        for path, num in folder_stats.items():
-            logging.info(f"Folder {path.name} have {num} files without sign.")
-        
-        return unsigned_files
+    def __init__(
+        self,
+        config: SignerConfig,
+        extensions: list[str],
+        db_manager: Optional[DatabaseManager] = None
+    ):
+        self.config = config
+        self.file_scanner = FileScanner(extensions)
+        self.signature_service = SignatureService(config)
+        self.db_manager = db_manager
     
-    
-    def sign_documents_batch(
-        self, 
-        root_folder: str,
-        key_password: str, 
-        extensions: List[str],
-        # is_sign_Long_type: Optional[bool] = True,
-        output_base_dir: Optional[str] = None,
-        callback_progress: Callable = None
-    ) -> List[SignResult]:
-        """
-        Пакетная подпись документов
-        """
-        progress_queue = queue.Queue()
-        tasks = []
+    def process_folder(
+        self,
+        root_folder: Path,
+        key_password: str,
+        output_base_dir: Optional[Path] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> list[SignResult]:
+        """Обработать все неподписанные файлы в папке"""
         
-        documents = self.find_documents_to_sign(root_folder, extensions)
-        if not documents:
-            logging.warning(f"No documents found in {root_folder}")
+        unsigned_files = self.file_scanner.find_unsigned_files(root_folder)
+        
+        if not unsigned_files:
+            logging.warning(f"No unsigned documents found in {root_folder}")
             return []
         
-        # self.dbManager.add_files_for_signing(documents, False)
+        logging.info(f"Found {len(unsigned_files)} documents to sign")
         
-        docsCounter = DocsSignCounter(len(documents))
-        logging.info(f"Found {docsCounter.total_docs} documents to sign")
+        if self.db_manager:
+            file_paths = [str(f) for f in unsigned_files]
+            self.db_manager.add_files_for_signing(file_paths, False)
         
-        for doc_path in documents:
+        progress_queue = queue.Queue()
+        
+        tasks = self._create_tasks(
+            unsigned_files,
+            root_folder,
+            key_password,
+            output_base_dir,
+            progress_queue
+        )
+        
+        return self._execute_batch(tasks, progress_queue, progress_callback)
+    
+    def _create_tasks(
+        self,
+        files: list[Path],
+        root_folder: Path,
+        key_password: str,
+        output_base_dir: Optional[Path],
+        progress_queue: queue.Queue
+    ) -> list[SignTask]:
+        """Создать задачи для подписания файлов"""
+        
+        tasks = []
+        
+        for file_path in files:
+            output_dir = None
             if output_base_dir:
-                rel_path = os.path.relpath(doc_path, root_folder)
-                output_dir = os.path.join(output_base_dir, os.path.dirname(rel_path))
-                os.makedirs(output_dir, exist_ok=True)
-            else:
-                output_dir = None
+                rel_path = file_path.relative_to(root_folder)
+                output_dir = output_base_dir / rel_path.parent
+                output_dir.mkdir(parents=True, exist_ok=True)
+            
+            def on_complete_callback():
+                progress_queue.put(1)
+            
             task = SignTask(
-                file_path=doc_path,
-                key_file_path=self.signer.key_bytes,
+                file_path=str(file_path),
                 key_password=key_password,
-                complet_task=progress_queue,
-                # is_sign_Long_type=is_sign_Long_type,
-                output_dir=output_dir,
-                atempts=0
+                output_dir=str(output_dir) if output_dir else None,
+                on_complete=on_complete_callback
             )
             tasks.append(task)
         
+        return tasks
+    
+    def _execute_batch(
+        self,
+        tasks: list[SignTask],
+        progress_queue: queue.Queue,
+        callback_progress: Optional[Callable[[int, int], None]]
+    ) -> list[SignResult]:
+        """Выполнить пакетную обработку задач"""
         results = []
+        docs_counter = ProgressCounter(len(tasks))
         
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
             futures = {
-                executor.submit(self.signer.sign_single_file, task): task 
+                executor.submit(self.signature_service.sign_file, task): task
                 for task in tasks
             }
-            logging.info(f"Starting threads")
-            while docsCounter.check_docks_completed() or any(f.running() for f in futures):
+            
+            logging.info(f"Starting batch processing with {self.config.max_workers} workers")
+            
+            while docs_counter.is_incomplete() or any(f.running() for f in futures):
                 try:
+                    # Ждём сигнал о завершении задачи из очереди (timeout 0.2 сек)
                     progress_queue.get(timeout=0.2)
-                    docsCounter.increment()
+                    
+                    # Увеличиваем счётчик
+                    docs_counter.increment()
+                    
+                    # Вызываем callback для обновления UI
+                    # ВАЖНО: callback вызывается в ГЛАВНОМ потоке!
                     if callback_progress:
-                        callback_progress(*docsCounter.get_value())
+                        callback_progress(*docs_counter.get_value())
+                        
                 except queue.Empty:
+                    # Если очередь пуста, просто продолжаем ожидание
                     pass
-
+            
             for future in as_completed(futures):
                 task = futures[future]
+                
                 try:
                     result = future.result()
                     results.append(result)
-                    
-                    # if result.success:
-                    #     logging.info(f"✓ Signed: {result.file_path} ({result.processing_time:.2f}s)")
-                    # else:
-                    #     logging.error(f"✗ Failed: {result.file_path} - {result.error_message}")
-                        
                 except Exception as e:
-                    logging.error(f"✗ Exception for {task.file_path}: {e}")
+                    logging.error(f"Exception for {task.file_path}: {e}")
                     results.append(SignResult(
                         file_path=task.file_path,
                         output_path="",
                         success=False,
                         error_message=str(e)
                     ))
+        
+        logging.info(f"Batch processing completed: {len(results)} files processed")
         return results
+
+
+class BatchSigner:
+    """Фасад для пакетной подписи документов"""
+    
+    def __init__(
+        self,
+        key_file_path: Union[str, Path],
+        cert_file_path: Optional[Union[str, Path]] = None,
+        is_sign_long_type: bool = True,
+        max_attempts: int = 10,
+        retry_delay: int = 10,
+        max_workers: int = 10,
+        extensions: Optional[list[str]] = None
+    ):
+        self.config = SignerConfig(
+            key_file_path=Path(key_file_path),
+            cert_file_path=Path(cert_file_path) if cert_file_path else None,
+            is_sign_long_type=is_sign_long_type,
+            max_attempts=max_attempts,
+            retry_delay=retry_delay,
+            max_workers=max_workers
+        )
+        
+        self.extensions = extensions or ['.pdf']
+        self.orchestrator = BatchOrchestrator(
+            config=self.config,
+            extensions=self.extensions,
+            db_manager=None
+        )
+    
+    def sign_documents_batch(
+        self,
+        root_folder: Union[str, Path],
+        key_password: str,
+        output_base_dir: Optional[Union[str, Path]] = None,
+        progress_callback: Optional[Callable[[int, int], None]] = None
+    ) -> list[SignResult]:
+        """
+        Пакетная подпись документов в папке
+        
+        Args:
+            root_folder: Корневая папка для поиска файлов
+            key_password: Пароль для ключа
+            output_base_dir: Директория для сохранения подписанных файлов
+            progress_callback: Callback для отслеживания прогресса (completed, total)
+        
+        Returns:
+            Список результатов подписания
+        """
+        root_path = Path(root_folder)
+        output_path = Path(output_base_dir) if output_base_dir else None
+        
+        return self.orchestrator.process_folder(
+            root_folder=root_path,
+            key_password=key_password,
+            output_base_dir=output_path,
+            progress_callback=progress_callback
+        )
