@@ -39,7 +39,11 @@ class FileScanner:
     def __init__(self, extensions: list[str]):
         self.extensions = [ext.lower() for ext in extensions]
     
-    def find_unsigned_files(self, root_folder: Path) -> list[Path]:
+    def find_unsigned_files(
+        self, 
+        root_folder: Path,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
+    ) -> list[Path]:
         """Найти все неподписанные файлы в директории"""
         unsigned_files = []
         folder_stats: dict[Path, int] = {}
@@ -55,18 +59,27 @@ class FileScanner:
                         folder_counter += 1
                         logging.info(f"[Folder #{folder_counter}] {item.name}")
                         local_unsigned += scan_directory(item)
+                        progress_callback(
+                            folder_counter, 
+                            total_folders,
+                            'папок'
+                        )
                     elif item.is_file() and item.suffix.lower() in self.extensions:
                         signature_file = item.with_suffix(item.suffix + '.p7s')
                         if not signature_file.exists():
                             unsigned_files.append(item)
                             local_unsigned += 1
-            except PermissionError:
-                logging.warning(f"No access to folder: {path}")
+            except Exception as e:
+                logging.warning(f"Error scan directory {path}: {e}")
             
             if local_unsigned > 0:
                 folder_stats[path] = local_unsigned
             
             return local_unsigned
+        
+        logging.info("Counting total folders...")
+        total_folders = sum(1 for _ in root_folder.rglob('*') if _.is_dir())
+        logging.info(f"Total folders: {total_folders}")
         
         scan_directory(root_folder)
         
@@ -79,7 +92,10 @@ class FileScanner:
 class SignatureService:
     """Сервис для подписания файлов с механизмом повторных попыток"""
     
-    def __init__(self, config: SignerConfig):
+    def __init__(
+        self, 
+        config: SignerConfig
+    ):
         self.config = config
         self._init_sign_manager()
     
@@ -96,7 +112,10 @@ class SignatureService:
         
         self.key_bytes = self.sign_manager.load_key()
     
-    def sign_file(self, task: SignTask) -> SignResult:
+    def sign_file(
+        self, 
+        task: SignTask
+    ) -> SignResult:
         """Подписать файл с повторными попытками при ошибках"""
         start_time = time.time()
         last_error = None
@@ -139,7 +158,10 @@ class SignatureService:
             processing_time=processing_time
         )
     
-    def _perform_signing(self, task: SignTask) -> str:
+    def _perform_signing(
+        self, 
+        task: SignTask
+    ) -> str:
         """Выполнить операцию подписания"""
         _, output_file = sign_file_cades_x_long(
             iface=self.sign_manager.iface,
@@ -169,11 +191,14 @@ class BatchOrchestrator:
         root_folder: Path,
         key_password: str,
         output_base_dir: Optional[Path] = None,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> list[SignResult]:
         """Обработать все неподписанные файлы в папке"""
         
-        unsigned_files = self.file_scanner.find_unsigned_files(root_folder)
+        unsigned_files = self.file_scanner.find_unsigned_files(
+            root_folder,
+            progress_callback
+        )
         
         if not unsigned_files:
             logging.warning(f"No unsigned documents found in {root_folder}")
@@ -233,7 +258,7 @@ class BatchOrchestrator:
         self,
         tasks: list[SignTask],
         progress_queue: queue.Queue,
-        callback_progress: Optional[Callable[[int, int], None]]
+        progress_callback: Optional[Callable[[int, int], None]]
     ) -> list[SignResult]:
         """Выполнить пакетную обработку задач"""
         results = []
@@ -257,8 +282,8 @@ class BatchOrchestrator:
                     
                     # Вызываем callback для обновления UI
                     # ВАЖНО: callback вызывается в ГЛАВНОМ потоке!
-                    if callback_progress:
-                        callback_progress(*docs_counter.get_value())
+                    if progress_callback:
+                        progress_callback(*docs_counter.get_value())
                         
                 except queue.Empty:
                     # Если очередь пуста, просто продолжаем ожидание
@@ -317,7 +342,7 @@ class BatchSigner:
         root_folder: Union[str, Path],
         key_password: str,
         output_base_dir: Optional[Union[str, Path]] = None,
-        progress_callback: Optional[Callable[[int, int], None]] = None
+        progress_callback: Optional[Callable[[int, int, str], None]] = None
     ) -> list[SignResult]:
         """
         Пакетная подпись документов в папке

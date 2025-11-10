@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import streamlit as st
 
 from src.utils.utils import remove_signed_files
-from src.sign.signer import main as signer
+from src.sign.services import sign_folder_documents
 
 
 load_dotenv()
@@ -239,16 +239,20 @@ class StreamlitApp:
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            def update_progress(completed, total):
+            def update_progress(
+                completed: int, 
+                total: int, 
+                elements_message: str = "документів"
+            ):
                 progress = int(completed / total * 100)
                 progress_bar.progress(progress)
-                status_text.text(f"Опрацьовано {completed} з {total} документів")
+                status_text.text(f"Опрацьовано {completed} з {total} {elements_message}")
             
             print(st.session_state.key_file,
             st.session_state.cert_file)
             
             with st.spinner("Підписування...", show_time=True):
-                result = signer(
+                success, message = sign_folder_documents(
                     root_folder=st.session_state.root_folder,
                     key_file=st.session_state.key_file,
                     is_long_sign=st.session_state.is_long_sign,
@@ -258,7 +262,10 @@ class StreamlitApp:
                     callback_progress=update_progress
                 )
             start.text("✅ Обробка закінчена!")
-            st.success(result)
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
             progress_bar.empty()
             info.empty()
             

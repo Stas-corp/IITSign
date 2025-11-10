@@ -44,7 +44,7 @@ class EUSignCPManager:
     def __init__(
         self,
         key_file_path: str,
-        cert_path: str,
+        cert_path: str = None,
         is_sign_Long_type: bool = True
     ):
         if not self._initialized:
@@ -121,9 +121,41 @@ class EUSignCPManager:
     
     def load_and_check_certificate(self) -> bool:
         try:
-            logging.info(self.cert_path)
-            with open(self.cert_path, "rb") as f:
-                cert_bytes = f.read()
+            if self.cert_path:
+                logging.info(self.cert_path)
+                with open(self.cert_path, "rb") as f:
+                    cert_bytes = f.read()
+            else:
+                try:
+                    context = []
+                    self.iface.CtxCreate(context)
+                    ctx = context[0]
+                    
+                    with open(self.key_file_path, 'rb') as f:
+                        key_file_data = f.read()  # Читаем весь файл в байты
+                    
+                    logging.info(f"Размер ключа: {len(key_file_data)} байт")
+                    
+                    private_key_context = []
+                    cert_owner_info = None
+                    
+                    self.iface.CtxReadPrivateKeyBinary(
+                        pvContext=ctx,
+                        pbPrivateKey=key_file_data,  # байты файла ключа
+                        dwPrivateKeyLength=len(key_file_data),
+                        pszPassword="LALA2108",
+                        ppvPrivateKeyContext=private_key_context,
+                        pInfo=cert_owner_info
+                    )
+                    
+                    logging.info(f"private_key_context : {len(private_key_context)}")
+                    logging.info(f"cert_owner_info : {len(cert_owner_info)}")
+                    
+                    # logging.info(f"Result geting certificate from key: {cert_owner_info}")
+                    
+                except Exception as e:
+                    logging.critical(f"Error load certificate from key: {e}")
+                    raise RuntimeError(e)
 
             cert_len = len(cert_bytes)
             self.iface.SaveCertificate(cert_bytes, cert_len)

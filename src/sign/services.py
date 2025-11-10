@@ -5,7 +5,7 @@ from typing import Callable, Union, Optional
 
 from src.sign.thread_signer import BatchSigner
 
-def main(
+def sign_folder_documents(
     root_folder: Union[str, Path],
     key_file: Union[str, Path],
     key_password: str,
@@ -14,10 +14,10 @@ def main(
     cert_file: Optional[Union[str, Path]] = None,
     extensions: Optional[list[str]] = None,
     output_base_dir: Optional[Union[str, Path]] = None,
-    callback_progress: Optional[Callable[[int, int], None]] = None,
+    callback_progress: Optional[Callable[[int, int, str], None]] = None,
     max_attempts: int = 3,
     retry_delay: int = 10
-) -> str:
+) -> tuple[bool, str]:
     """
     Выполнить пакетную подпись документов
     
@@ -61,6 +61,9 @@ def main(
             progress_callback=callback_progress
         )
         
+        if not results:
+            return (False, "No file for sign!")
+        
         elapsed_time = time.time() - start_time
         
         successful = sum(1 for r in results if r.success)
@@ -68,10 +71,15 @@ def main(
         
         message = f"""
 Batch signing completed:
+
     Successful: {successful}
+    
     Failed: {failed}
+    
     Total files: {len(results)}
+    
     Total time: {elapsed_time:.2f}s
+    
     Average time per file: {elapsed_time / len(results):.2f}s
         """.strip()
         
@@ -82,9 +90,9 @@ Batch signing completed:
                     logging.warning(f"  - {result.file_path}: {result.error_message}")
         
         logging.info(message)
-        return message
+        return (True, message)
         
     except Exception as e:
         message = f"Batch signing failed: {e}"
         logging.error(message)
-        return message
+        return (False, message)
