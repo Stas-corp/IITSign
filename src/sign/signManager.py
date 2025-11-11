@@ -66,7 +66,7 @@ class EUSignCPManager:
             
             dSettings = {}
             dSettings["bUseCMP"] = True
-            dSettings["szAddress"] = "http://uakey.com.ua/services/cmp/"
+            dSettings["szAddress"] = "http://acsk.privatbank.ua"
             dSettings["szPort"] = "80"
             dSettings["szCommonName"] = ""
             self.iface.SetCMPSettings(dSettings)
@@ -74,13 +74,13 @@ class EUSignCPManager:
             dSettings = {}
             dSettings["bUseOCSP"] = True
             dSettings["bBeforeStore"] = False
-            dSettings["szAddress"] = "http://uakey.com.ua/services/ocsp/"
+            dSettings["szAddress"] = "http://acsk.privatbank.ua/services/ocsp/"
             dSettings["szPort"] = "80"
             self.iface.SetOCSPSettings(dSettings)
             
             dSettings = {}
             dSettings["bGetStamps"] = True
-            dSettings["szAddress"] = "http://acskidd.gov.ua/services/tsp/"
+            dSettings["szAddress"] = "http://acsk.privatbank.ua/services/tsp/"
             dSettings["szPort"] = "80"
             self.iface.SetTSPSettings(dSettings)
             
@@ -119,12 +119,42 @@ class EUSignCPManager:
         return self.key_bytes
     
     
-    def load_and_check_certificate(self) -> bool:
+    def load_and_check_certificate(
+        self,
+        password: str = None
+    ) -> bool:
         try:
             if self.cert_path:
                 logging.info(self.cert_path)
                 with open(self.cert_path, "rb") as f:
                     cert_bytes = f.read()
+                    
+                cert_len = len(cert_bytes)
+                self.iface.SaveCertificate(
+                    cert_bytes, 
+                    cert_len
+                )
+                self.iface.RefreshFileStore(True)
+                
+                try:
+                    self.iface.CheckCertificate(
+                        cert_bytes,
+                        cert_len
+                    )
+                    # self.iface.CheckCertificateByOCSP(cert_bytes, cert_len)
+                    cert_owner_info = {}
+                    self.iface.ParseCertificateEx(
+                        cert_bytes,
+                        cert_len,
+                        cert_owner_info
+                    )
+                    
+                    logging.info(f"Result geting certificate from key: {cert_owner_info}")
+                    
+                except Exception as e:
+                    logging.error(f"Error check certificate: {e.args[0]["ErrorDesc"].decode()}")
+                    raise RuntimeError("Error check certificate")
+            
             else:
                 try:
                     context = []
@@ -132,18 +162,18 @@ class EUSignCPManager:
                     ctx = context[0]
                     
                     with open(self.key_file_path, 'rb') as f:
-                        key_file_data = f.read()  # Читаем весь файл в байты
+                        key_file_data = f.read()
                     
-                    logging.info(f"Размер ключа: {len(key_file_data)} байт")
+                    logging.info(f"Key size: {len(key_file_data)} bytes")
                     
                     private_key_context = []
-                    cert_owner_info = None
+                    cert_owner_info = {}
                     
                     self.iface.CtxReadPrivateKeyBinary(
                         pvContext=ctx,
-                        pbPrivateKey=key_file_data,  # байты файла ключа
+                        pbPrivateKey=key_file_data,
                         dwPrivateKeyLength=len(key_file_data),
-                        pszPassword="LALA2108",
+                        pszPassword=password,
                         ppvPrivateKeyContext=private_key_context,
                         pInfo=cert_owner_info
                     )
@@ -151,24 +181,14 @@ class EUSignCPManager:
                     logging.info(f"private_key_context : {len(private_key_context)}")
                     logging.info(f"cert_owner_info : {len(cert_owner_info)}")
                     
-                    # logging.info(f"Result geting certificate from key: {cert_owner_info}")
+                    logging.info(f"Result geting certificate from key: {cert_owner_info}")
                     
                 except Exception as e:
                     logging.critical(f"Error load certificate from key: {e}")
                     raise RuntimeError(e)
-
-            cert_len = len(cert_bytes)
-            self.iface.SaveCertificate(cert_bytes, cert_len)
-            self.iface.RefreshFileStore(True)
             
-            try:
-                self.iface.CheckCertificate(cert_bytes, cert_len)
-                # self.iface.CheckCertificateByOCSP(cert_bytes, cert_len)
-                logging.info("Certificate successfully download and check!")
-                return True
-            except Exception as e:
-                logging.error(f"Error check certificate: {e.args[0]["ErrorDesc"].decode()}")
-                raise RuntimeError("Error check certificate")
+            logging.info("Certificate successfully download and check!")
+            return True
         
         except Exception as e:
             logging.error(f"Error load certificate: {e}")
@@ -196,7 +216,7 @@ class EUSignCPManager:
         path = Path(cert_path_folder)
         scan_dir(path)
         for cer in certificates:
-            self.load_and_check_certificate(cer)
+            self.load_and_check_certificate(cer) # Исправить нужно, изменина логика загрузки сертификата
         
         
     def __del__(self):

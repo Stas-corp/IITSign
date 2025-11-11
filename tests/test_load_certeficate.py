@@ -17,7 +17,7 @@ def test():
     if platform.system() == "Windows":
         manager = EUSignCPManager(
             r"C:\Users\ssamo\Documents\Projects\IITSign\src\sign\keys\stas.jks",
-            r"C:\Users\ssamo\Documents\Projects\IITSign\src\sign\keys\Stas.crt"
+            r"C:\Users\ssamo\Documents\Projects\IITSign\src\sign\keys\Stas.crt" 
         )
     elif platform.system() == "Linux":
         manager = EUSignCPManager(

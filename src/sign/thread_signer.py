@@ -107,10 +107,19 @@ class SignatureService:
             is_sign_Long_type=self.config.is_sign_long_type
         )
         
+        self.key_bytes = self.sign_manager.load_key()
+    
+    
+    def load_certificate(
+        self,
+        password: str
+    ):
         if self.config.cert_file_path:
             self.sign_manager.load_and_check_certificate()
-        
-        self.key_bytes = self.sign_manager.load_key()
+        else:
+            self.sign_manager.load_and_check_certificate(password)
+            
+    
     
     def sign_file(
         self, 
@@ -356,6 +365,8 @@ class BatchSigner:
         Returns:
             Список результатов подписания
         """
+        self.orchestrator.signature_service.load_certificate(key_password)
+        
         root_path = Path(root_folder)
         output_path = Path(output_base_dir) if output_base_dir else None
         
