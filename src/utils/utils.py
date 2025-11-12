@@ -1,29 +1,23 @@
 import logging
 from pathlib import Path
+from typing import Optional
 
 from src.sign.signManager import EUSignCPManager
+from src.sign.thread_signer import FileScanner
 
 def remove_signed_files(
-    root_path_dir
+    root_path_dir: str,
+    extensions: Optional[list] = None
 ):
-    """
-    Рекурсивное удаление всех подписей в целевой папке.
-    """
-    unlink_files = []
-    root_path_dir = Path(root_path_dir)
-    list_path = [item for item in root_path_dir.iterdir()]
-    for path in list_path:
-        if path.is_dir():
-            temp = [item for item in path.iterdir()]
-            for item in temp:
-                list_path.append(item)
-        elif path.is_file() and path.suffix.lower() == ".p7s":
-            unlink_files.append(path)
-    logging.info(f"In dir {root_path_dir} files with sign {len(unlink_files)}")
-    if unlink_files:
-        for f in unlink_files:
-            f.unlink()
-                
+    if extensions is None:
+        extensions = ['.pdf', '.xml']
+    file_manager = FileScanner(extensions)
+    file_manager.find_unsigned_files(
+        root_folder=root_path_dir,
+        delete_signatures=True
+    )
+
+
 def analyze_jks_detailed(iface, jks_bytes, key_password):
     """
     Детальный анализ JKS контейнера

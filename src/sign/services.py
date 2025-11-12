@@ -6,7 +6,7 @@ from typing import Callable, Union, Optional
 from src.sign.thread_signer import BatchSigner
 
 def sign_folder_documents(
-    root_folder: Union[str, Path],
+    root_folder: str,
     key_file: Union[str, Path],
     key_password: str,
     is_long_sign: bool = True,

@@ -1,9 +1,8 @@
-import os
 import time
 import queue
 import logging
-import threading
-from pathlib import Path
+import platform
+from pathlib import Path, PureWindowsPath
 from typing import Optional, Callable, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -39,53 +38,93 @@ class FileScanner:
     def __init__(self, extensions: list[str]):
         self.extensions = [ext.lower() for ext in extensions]
     
+    
+    def _check_root_folder(
+        self,
+        root_folder: str
+    ) -> Path:
+        if platform.system() == "Linux":
+            base = Path("/app/data")
+            
+            # Нормализация Windows-строки: \ и/или дисковая метка
+            if ("\\" in root_folder) or (":" in root_folder):
+                pw = PureWindowsPath(root_folder)
+                # Отбрасываем диск и корень Windows, оставляем только относительные части
+                parts = [p for p in pw.parts if p not in (pw.drive, pw.root)]
+                rel = Path(*parts)
+            
+            path = base / rel
+            logging.info(f"Root folder: {path}")
+            return path
+        
+        path = Path(root_folder)
+        logging.info(f"Root folder: {path}")
+        return path
+    
     def find_unsigned_files(
-        self, 
-        root_folder: Path,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None
-    ) -> list[Path]:
-        """Найти все неподписанные файлы в директории"""
-        unsigned_files = []
+            self,
+            root_folder: Path,
+            progress_callback: Optional[Callable[[int, int, str], None]] = None,
+            delete_signatures: bool = False
+        ) -> list[Path]:
+        """Найти все неподписанные файлы в директории и опционально удалить все .p7s"""
+        
+        root_folder = self._check_root_folder(root_folder)
+        logging.info(f"{root_folder}: type {type(root_folder)}")
+        
+        unsigned_files: list[Path] = []
         folder_stats: dict[Path, int] = {}
         folder_counter = 0
-        
+        deleted_count = 0
+
         def scan_directory(path: Path) -> int:
-            nonlocal folder_counter
+            nonlocal folder_counter, deleted_count
             local_unsigned = 0
-            
+
             try:
                 for item in path.iterdir():
                     if item.is_dir():
                         folder_counter += 1
                         logging.info(f"[Folder #{folder_counter}] {item.name}")
                         local_unsigned += scan_directory(item)
-                        progress_callback(
-                            folder_counter, 
-                            total_folders,
-                            'папок'
-                        )
-                    elif item.is_file() and item.suffix.lower() in self.extensions:
-                        signature_file = item.with_suffix(item.suffix + '.p7s')
-                        if not signature_file.exists():
-                            unsigned_files.append(item)
-                            local_unsigned += 1
+                        if progress_callback:
+                            progress_callback(folder_counter, total_folders, 'папок')
+                    elif item.is_file():
+                        # Если включено удаление, удаляем все .p7s
+                        if delete_signatures and item.suffix.lower() == '.p7s':
+                            try:
+                                item.unlink()
+                                deleted_count += 1
+                            except Exception as e:
+                                logging.warning(f"Failed to delete {item}: {e}")
+                            continue
+
+                        # Логика поиска неподписанных файлов исходных типов
+                        if item.suffix.lower() in self.extensions:
+                            signature_file = item.with_suffix(item.suffix + '.p7s')
+                            if not signature_file.exists():
+                                unsigned_files.append(item)
+                                local_unsigned += 1
             except Exception as e:
                 logging.warning(f"Error scan directory {path}: {e}")
-            
+
             if local_unsigned > 0:
                 folder_stats[path] = local_unsigned
-            
+
             return local_unsigned
-        
+
         logging.info("Counting total folders...")
         total_folders = sum(1 for _ in root_folder.rglob('*') if _.is_dir())
         logging.info(f"Total folders: {total_folders}")
-        
+
         scan_directory(root_folder)
-        
+
         for path, count in folder_stats.items():
             logging.info(f"Folder {path.name} has {count} unsigned files")
-        
+
+        if delete_signatures:
+            logging.info(f"Deleted {deleted_count} .p7s files")
+
         return unsigned_files
 
 
@@ -365,7 +404,7 @@ class BatchSigner:
         Returns:
             Список результатов подписания
         """
-        self.orchestrator.signature_service.load_certificate(key_password)
+        # self.orchestrator.signature_service.load_certificate(key_password)
         
         root_path = Path(root_folder)
         output_path = Path(output_base_dir) if output_base_dir else None
