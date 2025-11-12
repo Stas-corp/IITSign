@@ -66,7 +66,7 @@ class EUSignCPManager:
             
             dSettings = {}
             dSettings["bUseCMP"] = True
-            dSettings["szAddress"] = "http://acsk.privatbank.ua"
+            dSettings["szAddress"] = "https://uakey.com.ua/"
             dSettings["szPort"] = "80"
             dSettings["szCommonName"] = ""
             self.iface.SetCMPSettings(dSettings)
@@ -80,7 +80,7 @@ class EUSignCPManager:
             
             dSettings = {}
             dSettings["bGetStamps"] = True
-            dSettings["szAddress"] = "http://acsk.privatbank.ua/services/tsp/"
+            dSettings["szAddress"] = "https://ca.informjust.ua/"
             dSettings["szPort"] = "80"
             self.iface.SetTSPSettings(dSettings)
             

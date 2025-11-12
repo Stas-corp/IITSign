@@ -97,7 +97,8 @@ class StreamlitApp:
             
             st.markdown("---")
             
-            company_signer = list(KEYS_FILES.keys())
+            company_signer = []
+            # company_signer = list(KEYS_FILES.keys())
             company_signer.append('Окремий підпис')
             
             signer_radio = st.radio(
@@ -215,6 +216,7 @@ class StreamlitApp:
                 st.session_state.key_file = save_uploaded_to_disk(key_file)
                 st.session_state.add_user_secrets = True
                 st.session_state.add_user_secrets_toast = True
+                logging.info(st.session_state)
                 st.rerun()
         else:
             st.warning("⚠️ Завантажте мінімум файл ключа!")
@@ -224,22 +226,23 @@ class StreamlitApp:
         st.title("⚖️ Пакетний підпис файлів для ЕС")
         st.markdown("---")
         
-        if st.session_state.user_secrets:
-            if st.session_state.key_file:
-                st.success("✅ Ключ і сертифікат завантажено!")
-                cpmng = EUSignCPManager(
-                    key_file_path=st.session_state.key_file,
-                    cert_path=st.session_state.cert_file
-                )
-                if not st.session_state.cert_file:
-                    self.password_dialog(cpmng.load_and_check_certificate)
+        if not st.session_state.is_password:
+            if st.session_state.user_secrets:
+                if st.session_state.key_file:
+                    st.success("✅ Ключ і сертифікат завантажено!")
+                    cpmng = EUSignCPManager(
+                        key_file_path=st.session_state.key_file,
+                        cert_path=st.session_state.cert_file
+                    )
+                    if not st.session_state.cert_file:
+                        self.password_dialog(cpmng.load_and_check_certificate)
+                    else:
+                        cpmng.load_and_check_certificate()
                 else:
-                    cpmng.load_and_check_certificate()
-            else:
-                st.warning("⚠️ Необхідно завантажити ключ і сертифікат")
-                load_secret = st.button("🔑 Завантажити ключ і сертифікат")
-                if load_secret:
-                    self.download_secrets()
+                    st.warning("⚠️ Необхідно завантажити ключ і сертифікат")
+                    load_secret = st.button("🔑 Завантажити ключ і сертифікат")
+                    if load_secret:
+                        self.download_secrets()
         
         if st.session_state.key_file:
             if not st.session_state.sign_btn:
