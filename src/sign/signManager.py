@@ -66,7 +66,7 @@ class EUSignCPManager:
             
             dSettings = {}
             dSettings["bUseCMP"] = True
-            dSettings["szAddress"] = "https://uakey.com.ua/"
+            dSettings["szAddress"] = "http://acsk.privatbank.ua"
             dSettings["szPort"] = "80"
             dSettings["szCommonName"] = ""
             self.iface.SetCMPSettings(dSettings)
@@ -157,16 +157,16 @@ class EUSignCPManager:
             
             else:
                 try:
-                    context = []
-                    self.iface.CtxCreate(context)
-                    ctx = context[0]
+                    lib_ctx = []
+                    self.iface.CtxCreate(lib_ctx)
+                    ctx = lib_ctx[0]
                     
                     with open(self.key_file_path, 'rb') as f:
                         key_file_data = f.read()
                     
                     logging.info(f"Key size: {len(key_file_data)} bytes")
                     
-                    private_key_context = []
+                    pk_ctx = []
                     cert_owner_info = {}
                     
                     self.iface.CtxReadPrivateKeyBinary(
@@ -174,11 +174,11 @@ class EUSignCPManager:
                         pbPrivateKey=key_file_data,
                         dwPrivateKeyLength=len(key_file_data),
                         pszPassword=password,
-                        ppvPrivateKeyContext=private_key_context,
+                        ppvPrivateKeyContext=pk_ctx,
                         pInfo=cert_owner_info
                     )
                     
-                    logging.info(f"private_key_context : {len(private_key_context)}")
+                    logging.info(f"private_key_context : {len(pk_ctx)}")
                     logging.info(f"cert_owner_info : {len(cert_owner_info)}")
                     
                     logging.info(f"Result geting certificate from key: {cert_owner_info}")
@@ -186,6 +186,19 @@ class EUSignCPManager:
                 except Exception as e:
                     logging.critical(f"Error load certificate from key: {e}")
                     raise RuntimeError(e)
+                
+                finally:
+                    try:
+                        if pk_ctx:
+                            self.iface.CtxFreePrivateKey(pk_ctx[0])
+                    except Exception:
+                        pass
+                    
+                    try:
+                        if lib_ctx:
+                            self.iface.CtxFree(lib_ctx[0])
+                    except Exception:
+                        pass
             
             logging.info("Certificate successfully download and check!")
             return True

@@ -76,7 +76,33 @@ class StreamlitApp:
             if st.session_state.dell_sign_toast:
                 st.toast("Підписи видалено!", icon="✅")
                 st.session_state.dell_sign_toast = False
-
+    
+    
+    def _instruction(self):
+        st.markdown("""
+                ### 📋 Інструкція до користування
+            """)
+        with st.expander("Натиснути для розгортання", expanded=False, icon="ℹ️"):
+            st.warning("#### ⚠️ Уважно поставитись до читання інструкції")
+            st.markdown("""
+                - Для роботи з підписами для початку треба завнтажити ключ
+                    - При переході на `🔑 Завантажити ключ і сертифікат` завантажуємо файли
+                    
+                    - Для КНЕДП `ЦСК Україна` достатньо передати тільки ключ
+                    
+                    - Для всіх інших треба пердати і ключ і сертифікат
+                    
+                    - Після успішного звантаження ввести пароль від ключа
+                
+                - Для підпису пакету документів треба передати шлях до папки
+                
+                    - Папка повина знаходитись в розділі /Documents на сервері де працює сервіс
+                    
+                    - Якщо в середині паки є інші папки - программ пройде по всім файлам в середині цих папко і буде підписувати все що знайде з роширенням `.pdf`
+                
+                """)
+    
+    
     def render_sidebar(self):
         """Отрисовка бокового меню"""
         with st.sidebar:
@@ -86,13 +112,13 @@ class StreamlitApp:
             # Режим підпису
             sign_mode = st.radio(
                 "📝 Режим підпису",
-                ['Пакетний підпис', 'Підпис одного файлу'],
+                ['Локальний пакетний підпис', 'Підпис окремих документів'],
                 key="sign_mode_radio",
             )
             
-            if sign_mode == 'Пакетний підпис':
+            if sign_mode == 'Локальний пакетний підпис':
                 st.session_state.sign_mode = 'batch'
-            else:
+            elif sign_mode == 'Підпис окремих документів':
                 st.session_state.sign_mode = 'single'
             
             st.markdown("---")
@@ -147,6 +173,24 @@ class StreamlitApp:
                     if st.dialog("Видалення всіх підписів"):
                         self.dell_signs()
     
+    def validate_load_key(self):
+        if st.session_state.user_secrets:
+            if st.session_state.key_file:
+                st.success("✅ Ключ і сертифікат завантажено!")
+                cpmng = EUSignCPManager(
+                    key_file_path=st.session_state.key_file,
+                    cert_path=st.session_state.cert_file
+                )
+                if not st.session_state.cert_file:
+                    self.password_dialog(cpmng.load_and_check_certificate)
+                else:
+                    cpmng.load_and_check_certificate()
+                return True
+            else:
+                st.warning("⚠️ Необхідно завантажити ключ і сертифікат")
+                return False
+        return False
+
     
     @st.dialog("Введіть пароль")
     def password_dialog(
@@ -212,7 +256,9 @@ class StreamlitApp:
         if key_file:
             st.success("✅ Обидва файли успішно завантажено!")
             if st.button("➡️ Продовжити"):
-                st.session_state.cert_file = save_uploaded_to_disk(cert_file) if cert_file else None
+                if cert_file:
+                    st.session_state.cert_file = save_uploaded_to_disk(cert_file)
+                    st.session_state.is_password = True
                 st.session_state.key_file = save_uploaded_to_disk(key_file)
                 st.session_state.add_user_secrets = True
                 st.session_state.add_user_secrets_toast = True
@@ -226,23 +272,13 @@ class StreamlitApp:
         st.title("⚖️ Пакетний підпис файлів для ЕС")
         st.markdown("---")
         
+        self._instruction()
+        
         if not st.session_state.is_password:
-            if st.session_state.user_secrets:
-                if st.session_state.key_file:
-                    st.success("✅ Ключ і сертифікат завантажено!")
-                    cpmng = EUSignCPManager(
-                        key_file_path=st.session_state.key_file,
-                        cert_path=st.session_state.cert_file
-                    )
-                    if not st.session_state.cert_file:
-                        self.password_dialog(cpmng.load_and_check_certificate)
-                    else:
-                        cpmng.load_and_check_certificate()
-                else:
-                    st.warning("⚠️ Необхідно завантажити ключ і сертифікат")
-                    load_secret = st.button("🔑 Завантажити ключ і сертифікат")
-                    if load_secret:
-                        self.download_secrets()
+            if not self.validate_load_key():
+                load_secret = st.button("🔑 Завантажити ключ і сертифікат")
+                if load_secret:
+                    self.download_secrets()
         
         if st.session_state.key_file:
             if not st.session_state.sign_btn:
@@ -323,23 +359,13 @@ class StreamlitApp:
         st.title("📄 Підпис одного файлу")
         st.markdown("---")
         
+        self._instruction()
+        
         if not st.session_state.is_password:
-            if st.session_state.user_secrets:
-                if st.session_state.key_file:
-                    st.success("✅ Ключ і сертифікат завантажено!")
-                    cpmng = EUSignCPManager(
-                        key_file_path=st.session_state.key_file,
-                        cert_path=st.session_state.cert_file
-                    )
-                    if not st.session_state.cert_file:
-                        self.password_dialog(cpmng.load_and_check_certificate)
-                    else:
-                        cpmng.load_and_check_certificate()
-                else:
-                    st.warning("⚠️ Необхідно завантажити ключ і сертифікат")
-                    load_secret = st.button("🔑 Завантажити ключ і сертифікат")
-                    if load_secret:
-                        self.download_secrets()
+            if not self.validate_load_key():
+                load_secret = st.button("🔑 Завантажити ключ і сертифікат")
+                if load_secret:
+                    self.download_secrets()
         
         
         if st.session_state.key_file:
@@ -354,9 +380,7 @@ class StreamlitApp:
             
             if uploaded_files:
                 st.success(f"✅ Файл завантажено!")
-                # st.session_state.uploaded_file = uploaded_files
                 
-                # Шаг 3: Ввод пароля
                 st.markdown("---")
                 st.subheader("🔐 Введіть пароль")
                 
@@ -372,6 +396,7 @@ class StreamlitApp:
                         self.sign_single_file(uploaded_files, key_password)
                 else:
                     st.error("❌ Введіть пароль!")
+
 
     def sign_single_file(
         self,
