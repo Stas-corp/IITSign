@@ -260,16 +260,40 @@ class StreamlitApp:
             tmp.close()
             return Path(tmp.name)
         
-        if key_file:
-            st.success("✅ Обидва файли успішно завантажено!")
-            if st.button("➡️ Продовжити"):
-                if cert_file:
-                    st.session_state.cert_file = save_uploaded_to_disk(cert_file)
+        if key_file and not cert_file:
+            st.session_state.key_file = save_uploaded_to_disk(key_file)
+            st.success("✅ Ключ заванатжено")
+            password = st.text_input("Пароль:", type="password")
+            if st.button("Підтвердити"):
+                if password:
+                    # st.session_state.password = password
+                    cpmng = EUSignCPManager(
+                        key_file_path=st.session_state.key_file,
+                    )
+                    cpmng.load_and_check_certificate(password)
+                    # cpmng.__del__()
                     st.session_state.is_password = True
+                    st.session_state.add_user_secrets = True
+                    st.session_state.add_user_secrets_toast = True
+                    st.rerun()
+                else:
+                    st.error("Введіть пароль")
+        
+        elif key_file and cert_file:
+            st.success("✅ Ключ і сертифікат завантажено")
+            
+            if st.button("➡️ Продовжити"):
+                st.session_state.cert_file = save_uploaded_to_disk(cert_file)
                 st.session_state.key_file = save_uploaded_to_disk(key_file)
+                cpmng = EUSignCPManager(
+                        key_file_path=st.session_state.key_file,
+                        cert_path=st.session_state.cert_file
+                    )
+                cpmng.load_and_check_certificate()
+                # cpmng.__del__()
+                st.session_state.is_password = True
                 st.session_state.add_user_secrets = True
                 st.session_state.add_user_secrets_toast = True
-                logging.info(st.session_state)
                 st.rerun()
         else:
             st.warning("⚠️ Завантажте мінімум файл ключа!")

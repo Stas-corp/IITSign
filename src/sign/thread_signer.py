@@ -352,6 +352,7 @@ class BatchOrchestrator:
                         error_message=str(e)
                     ))
         
+        # self.signature_service.sign_manager.__del__()
         logging.info(f"Batch processing completed: {len(results)} files processed")
         return results
 
