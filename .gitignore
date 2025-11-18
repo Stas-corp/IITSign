@@ -228,3 +228,4 @@ request.json
 response.json
 debug_verify_digest.py
 signature_files.db
+src/web/alt_app.py

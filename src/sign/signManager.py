@@ -44,7 +44,7 @@ class EUSignCPManager:
     def __init__(
         self,
         key_file_path: str,
-        cert_path: str,
+        cert_path: str = None,
         is_sign_Long_type: bool = True
     ):
         if not self._initialized:
@@ -62,11 +62,26 @@ class EUSignCPManager:
         try:
             EULoad()
             self.iface = EUGetInterface()
-            self.iface.Initialize()
+            self.iface.SetUIMode(False)
+            if not self.iface.IsInitialized():
+                self.iface.Initialize()
+            self.iface.SetUIMode(False)
+
+            fs = {
+                'szPath': r'C:\Certificates',
+                'bCheckCRLs': False,
+                'bAutoRefresh': True,
+                'bOwnCRLsOnly': False,
+                'bFullAndDeltaCRLs': False,
+                'bAutoDownloadCRLs': False,
+                'bSaveLoadedCerts': True,
+                'dwExpireTime': 3600
+            }
+            self.iface.SetFileStoreSettings(fs)
             
             dSettings = {}
             dSettings["bUseCMP"] = True
-            dSettings["szAddress"] = "http://uakey.com.ua/services/cmp/"
+            dSettings["szAddress"] = "http://acsk.privatbank.ua"
             dSettings["szPort"] = "80"
             dSettings["szCommonName"] = ""
             self.iface.SetCMPSettings(dSettings)
@@ -74,13 +89,13 @@ class EUSignCPManager:
             dSettings = {}
             dSettings["bUseOCSP"] = True
             dSettings["bBeforeStore"] = False
-            dSettings["szAddress"] = "http://uakey.com.ua/services/ocsp/"
+            dSettings["szAddress"] = "http://acsk.privatbank.ua/services/ocsp/"
             dSettings["szPort"] = "80"
             self.iface.SetOCSPSettings(dSettings)
             
             dSettings = {}
             dSettings["bGetStamps"] = True
-            dSettings["szAddress"] = "http://acskidd.gov.ua/services/tsp/"
+            dSettings["szAddress"] = "https://ca.informjust.ua/"
             dSettings["szPort"] = "80"
             self.iface.SetTSPSettings(dSettings)
             
@@ -118,25 +133,96 @@ class EUSignCPManager:
         
         return self.key_bytes
     
-    
-    def load_and_check_certificate(self) -> bool:
-        try:
-            logging.info(self.cert_path)
-            with open(self.cert_path, "rb") as f:
-                cert_bytes = f.read()
 
-            cert_len = len(cert_bytes)
-            self.iface.SaveCertificate(cert_bytes, cert_len)
-            self.iface.RefreshFileStore(True)
+    def _load_certificate(
+        self,
+        certificate: str
+    ):
+        logging.info(certificate)
+        with open(certificate, "rb") as f:
+            cert_bytes = f.read()
             
-            try:
-                self.iface.CheckCertificate(cert_bytes, cert_len)
-                # self.iface.CheckCertificateByOCSP(cert_bytes, cert_len)
-                logging.info("Certificate successfully download and check!")
-                return True
-            except Exception as e:
-                logging.error(f"Error check certificate: {e.args[0]["ErrorDesc"].decode()}")
-                raise RuntimeError("Error check certificate")
+        cert_len = len(cert_bytes)
+        self.iface.SaveCertificate(
+            cert_bytes, 
+            cert_len
+        )
+        self.iface.RefreshFileStore(True)
+        
+        try:
+            self.iface.CheckCertificate(
+                cert_bytes,
+                cert_len
+            )
+            cert_owner_info = {}
+            self.iface.ParseCertificateEx(
+                cert_bytes,
+                cert_len,
+                cert_owner_info
+            )
+            
+            logging.info(f"Result geting certificate from key: {cert_owner_info}")
+            
+        except Exception as e:
+            logging.error(f"Error check certificate: {e.args[0]["ErrorDesc"].decode()}")
+            raise RuntimeError("Error check certificate")
+
+    
+    def load_and_check_certificate(
+        self,
+        password: str = None
+    ) -> bool:
+        try:
+            if self.cert_path:
+                self._load_certificate(self.cert_path)
+            
+            else:
+                try:
+                    lib_ctx = []
+                    self.iface.CtxCreate(lib_ctx)
+                    ctx = lib_ctx[0]
+                    
+                    with open(self.key_file_path, 'rb') as f:
+                        key_file_data = f.read()
+                    
+                    logging.info(f"Key size: {len(key_file_data)} bytes")
+                    
+                    pk_ctx = []
+                    cert_owner_info = {}
+                    
+                    self.iface.CtxReadPrivateKeyBinary(
+                        pvContext=ctx,
+                        pbPrivateKey=key_file_data,
+                        dwPrivateKeyLength=len(key_file_data),
+                        pszPassword=password,
+                        ppvPrivateKeyContext=pk_ctx,
+                        pInfo=cert_owner_info
+                    )
+                    
+                    logging.info(f"private_key_context : {len(pk_ctx)}")
+                    logging.info(f"cert_owner_info : {len(cert_owner_info)}")
+                    
+                    logging.info(f"Result geting certificate from key: {cert_owner_info}")
+                    
+                except Exception as e:
+                    logging.critical(f"Error load certificate from key: {e}")
+                    raise RuntimeError(e)
+                
+                finally:
+                    try:
+                        if pk_ctx:
+                            self.iface.CtxFreePrivateKey(pk_ctx[0])
+                    except Exception:
+                        pass
+                    
+                    try:
+                        if lib_ctx:
+                            self.iface.CtxFree(lib_ctx[0])
+                    except Exception:
+                        pass
+            
+            logging.info("Certificate successfully download and check!")
+            return True
         
         except Exception as e:
             logging.error(f"Error load certificate: {e}")
@@ -164,7 +250,8 @@ class EUSignCPManager:
         path = Path(cert_path_folder)
         scan_dir(path)
         for cer in certificates:
-            self.load_and_check_certificate(cer)
+            # self.load_and_check_certificate(cer) # Исправить нужно, изменина логика загрузки сертификата
+            pass
         
         
     def __del__(self):
