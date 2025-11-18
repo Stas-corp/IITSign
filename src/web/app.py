@@ -70,10 +70,6 @@ class StreamlitApp:
         if "root_folder" not in st.session_state:
             st.session_state.root_folder = None
             
-        if "add_user_secrets_toast" in st.session_state:
-            if st.session_state.add_user_secrets_toast:
-                st.toast("Ключ і сертифікат додано!", icon="✅")
-                st.session_state.add_user_secrets_toast = False
         if "dell_sign_toast" in st.session_state:
             if st.session_state.dell_sign_toast:
                 st.toast("Підписи видалено!", icon="✅")
@@ -274,7 +270,6 @@ class StreamlitApp:
                     # cpmng.__del__()
                     st.session_state.is_password = True
                     st.session_state.add_user_secrets = True
-                    st.session_state.add_user_secrets_toast = True
                     st.rerun()
                 else:
                     st.error("Введіть пароль")
@@ -293,7 +288,6 @@ class StreamlitApp:
                 # cpmng.__del__()
                 st.session_state.is_password = True
                 st.session_state.add_user_secrets = True
-                st.session_state.add_user_secrets_toast = True
                 st.rerun()
         else:
             st.warning("⚠️ Завантажте мінімум файл ключа!")
@@ -311,7 +305,7 @@ class StreamlitApp:
                 if load_secret:
                     self.download_secrets()
         
-        if st.session_state.key_file:
+        if st.session_state.add_user_secrets:
             if not st.session_state.sign_btn:
                 root_folder = st.text_input(
                     "Введіть шлях до локальної папки з документами",
@@ -399,7 +393,7 @@ class StreamlitApp:
                     self.download_secrets()
         
         
-        if st.session_state.key_file:
+        if st.session_state.add_user_secrets:
             st.subheader("📎 Завантажте файл для підпису")
             
             uploaded_files = st.file_uploader(
