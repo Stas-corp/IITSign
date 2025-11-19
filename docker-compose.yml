@@ -11,7 +11,7 @@ services:
     # environment:
     #   DB_SERVER: "mssql"
     volumes:
-      - "C:/Users/ssamo/Documents:/app/data"  # <-- bind mount: путь на хосте → путь в контейнере
+      - "D:/Test_sign:/app/data"  # <-- bind mount: путь на хосте → путь в контейнере
     restart: unless-stopped
 
   mssql:

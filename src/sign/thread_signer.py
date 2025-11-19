@@ -53,9 +53,14 @@ class FileScanner:
                 parts = [p for p in pw.parts if p not in (pw.drive, pw.root)]
                 rel = Path(*parts)
             
-            path = base / rel
-            logging.info(f"Root folder: {path}")
-            return path
+                path = base / rel
+                logging.info(f"Root folder: {path}")
+                return path
+            
+            elif "/" not in root_folder:
+                path = base / root_folder
+                logging.info(f"Root folder: {path}")
+                return path
         
         path = Path(root_folder)
         logging.info(f"Root folder: {path}")
@@ -407,11 +412,11 @@ class BatchSigner:
         """
         # self.orchestrator.signature_service.load_certificate(key_password)
         
-        root_path = Path(root_folder)
+        # root_folder = Path(root_folder)
         output_path = Path(output_base_dir) if output_base_dir else None
         
         return self.orchestrator.process_folder(
-            root_folder=root_path,
+            root_folder=root_folder,
             key_password=key_password,
             output_base_dir=output_path,
             progress_callback=progress_callback

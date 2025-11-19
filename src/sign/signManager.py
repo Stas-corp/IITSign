@@ -13,13 +13,16 @@ sys.path.insert(0, str(ROOT_DIR))
 
 if platform.system() == "Windows":
     # Для Windows: .pyd + dll
+    CERTIFICATE_DIR = r'C:\Certificates'
     MODULES_DIR = ROOT_DIR / "Modules"
     os.add_dll_directory(str(MODULES_DIR))
     os.environ["PATH"] = str(MODULES_DIR) + os.pathsep + os.environ.get("PATH", "")
     from Modules.EUSignCP import *
 elif platform.system() == "Linux":
     # Для Linux: .so
+    CERTIFICATE_DIR = '/data/certificates'
     MODULES_DIR = ROOT_DIR / "ModulesUNIX"
+    
     os.environ["LD_LIBRARY_PATH"] = str(MODULES_DIR) + os.pathsep + os.environ.get("LD_LIBRARY_PATH", "")
     from ModulesUNIX.EUSignCP import *
 
@@ -68,7 +71,7 @@ class EUSignCPManager:
             self.iface.SetUIMode(False)
 
             fs = {
-                'szPath': r'C:\Certificates',
+                'szPath': CERTIFICATE_DIR,
                 'bCheckCRLs': False,
                 'bAutoRefresh': True,
                 'bOwnCRLsOnly': False,
@@ -78,6 +81,11 @@ class EUSignCPManager:
                 'dwExpireTime': 3600
             }
             self.iface.SetFileStoreSettings(fs)
+
+            offline_mode = {
+                'bOfflineMode': False
+            }
+            self.iface.SetModeSettings(offline_mode)
             
             dSettings = {}
             dSettings["bUseCMP"] = True
